@@ -18,3 +18,5 @@ The Buyer may withhold the disputed part of an invoice and shall notify the Supp
 |---|---|---|---|---|
 | 1 | Corrugated carton, 5-ply (CC-5) | CC-5 | 100.00 | 2026-01-01 |
 | 2 | Pallet wrap roll (PW-1) | PW-1 | 250.00 | 2026-01-01 |
+
+<!-- Schedule A clause definitions -->
