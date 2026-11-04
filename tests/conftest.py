@@ -35,8 +35,8 @@ def make_invoice(lines, **over):
         "currency": "INR",
         "lines": lines,
         "stated_total": None,
-        "source_file": "invoices/x.txt",
-        "source_sha256": "0" * 64,
+        "source_file": "invoices/acme-inv-1103.txt",
+        "source_sha256": "22d395d2a0f513f2675d40725c63ff60b4a10e62fdb16dbb2d5110742ab7bea6",
         "extraction_issues": [],
     }
     inv.update(over)
@@ -48,15 +48,11 @@ def carton(qty=500, price=112, total=None, desc="Corrugated carton, 5-ply (CC-5)
             "unit_price": price, "line_total": qty * price if total is None else total}
 
 
-def wrap(qty=40, price=250, n=2):
+def wrap(qty=40, price=250, total=None, n=2):
     return {"line_no": n, "description": "Pallet wrap roll (PW-1)", "quantity": qty, "unit": "unit",
-            "unit_price": price, "line_total": qty * price}
+            "unit_price": price, "line_total": qty * price if total is None else total}
 
 
 @pytest.fixture
 def mk():
     return make_invoice, carton, wrap
-
-# Isolates temporary case directories for testing
-
-# Mock invoice payload factory

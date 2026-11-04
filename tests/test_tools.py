@@ -188,7 +188,7 @@ def test_cli_end_to_end_with_demo_files(root, tmp_path, vendor_file):
             {"line_no": 2, "description": "Pallet wrap roll (PW-1)", "quantity": 40, "unit": "unit",
              "unit_price": 250.00, "line_total": 10000.00}],
         "stated_total": 66000.00, "source_file": "invoices/acme-inv-1103.txt",
-        "source_sha256": "0" * 64, "extraction_issues": []}
+        "source_sha256": "22d395d2a0f513f2675d40725c63ff60b4a10e62fdb16dbb2d5110742ab7bea6", "extraction_issues": []}
     inv_path = write(tmp_path / "invoice.json", inv)
 
     chk = run(root, "tools/check_invoice.py", inv_path, "--update")

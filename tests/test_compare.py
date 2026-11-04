@@ -144,15 +144,20 @@ def test_missing_quantity_is_unmatched(vendor, mk):
 def test_line_total_mismatch_warns(vendor, mk):
     make_invoice, carton, _ = mk
     r = compare(make_invoice([carton(500, 112, total=57000)]), vendor)
+    assert r["verification_status"] == "BLOCKED"
+    assert r["lines"][0]["status"] == "SOURCE_DISCREPANCY"
     assert r["lines"][0]["line_total_matches"] is False
     assert any("line total is written as 57000.00" in w for w in r["warnings"])
+    assert len(r["blocking_issues"]) > 0
 
 
 def test_stated_total_mismatch_warns(vendor, mk):
     make_invoice, carton, _ = mk
     r = compare(make_invoice([carton()], stated_total=99999), vendor)
+    assert r["verification_status"] == "BLOCKED"
     assert r["totals"]["stated_total_matches"] is False
     assert any("Stated total" in w for w in r["warnings"])
+    assert len(r["blocking_issues"]) > 0
 
 
 def test_no_float_error_on_awkward_decimals(vendor, mk):
