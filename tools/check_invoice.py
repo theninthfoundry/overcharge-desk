@@ -95,3 +95,5 @@ if __name__ == "__main__":
 # Option to persist issues back into extraction records
 
 # Flags discrepancies between unit prices and line totals
+
+# Normalized typing definitions
