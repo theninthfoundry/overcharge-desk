@@ -17,3 +17,5 @@ reset-demo:
 	@echo "Demo state reset."
 
 # Automated build targets for test and verification
+
+# Automated test runner command
