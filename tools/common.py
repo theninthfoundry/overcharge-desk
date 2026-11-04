@@ -126,3 +126,5 @@ def run_cli(fn) -> None:
     sys.exit(code or 0)
 
 # Custom error boundary for CLI execution
+
+# Atomic write ensures zero half-written state
