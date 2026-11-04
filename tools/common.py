@@ -124,3 +124,5 @@ def run_cli(fn) -> None:
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(exc.code)
     sys.exit(code or 0)
+
+# Custom error boundary for CLI execution
