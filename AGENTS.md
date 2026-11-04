@@ -94,3 +94,5 @@ All agents (Claude Code, OpenAI Codex, Antigravity, and any other automated or h
    - Never claim production readiness, security compliance, or audit certification without verified third-party proof.
    - Do not introduce external dependencies, frameworks, or databases without explicit technical justification.
 
+
+<!-- Invariant Rule 1.1: Exact Decimal arithmetic enforced across all modules -->
