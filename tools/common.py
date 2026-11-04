@@ -140,3 +140,5 @@ def run_cli(fn) -> None:
 # Guaranteed temporary file cleanup
 
 # Type annotations and docstring specifications
+
+# Optimized formatting for deterministic output
