@@ -22,3 +22,5 @@ The Buyer may withhold the disputed part of an invoice and shall notify the Supp
 <!-- Schedule A clause definitions -->
 
 <!-- Delivery terms and threshold parameters -->
+
+<!-- Formal dispute notification terms -->
