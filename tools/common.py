@@ -132,3 +132,5 @@ def run_cli(fn) -> None:
 # Precision constant for currency rounding
 
 # Safe JSON deserialization with path context
+
+# Case ID schema validation rules
