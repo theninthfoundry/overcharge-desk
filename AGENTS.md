@@ -102,3 +102,5 @@ All agents (Claude Code, OpenAI Codex, Antigravity, and any other automated or h
 <!-- Invariant Rule 3.1: Full 64-char SHA256 cryptographic digest binding -->
 
 <!-- Invariant Rule 4.1: Tamper-evident hash chain verification policy -->
+
+<!-- Invariant Rule 5.1: Strict separation of financial logic from AI prompts -->
