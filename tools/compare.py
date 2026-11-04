@@ -14,14 +14,17 @@ import argparse
 import re
 from pathlib import Path
 
-from common import (CENT, ToolError, emit, exact_str, load_json, money_str, norm,
-                    num_str, parse_date, q2, run_cli, to_decimal, write_json_atomic,
+from common import (CENT, ToolError, emit, exact_str, is_safe_relative_path,
+                    load_json, money_str, norm, num_str, parse_date, q2,
+                    run_cli, sha256_file, to_decimal, write_json_atomic,
+                    save_comparison_with_digest, hash_comparison_result,
                     STATE_VERIFIED, STATE_REVIEW_REQUIRED, STATE_BLOCKED,
                     STATUS_VERIFIED_MATCH, STATUS_VERIFIED_OVERCHARGE, STATUS_VERIFIED_UNDERCHARGE,
                     STATUS_SOURCE_DISCREPANCY, STATUS_UNMATCHED, STATUS_REQUIRES_HUMAN_REVIEW)
 
 SCHEMA_VERSION = "2.0.0"
 ZERO = to_decimal(0)
+SHA_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 def vendor_matches(invoice: dict, vendor: dict) -> bool:
@@ -59,7 +62,7 @@ def rates_in_force(rates: list, item_key: str, on) -> list:
     return found
 
 
-def compare(invoice: dict, vendor: dict) -> dict:
+def compare(invoice: dict, vendor: dict, base_dir: Path | str | None = None) -> dict:
     if not vendor_matches(invoice, vendor):
         raise ToolError(
             f"Invoice vendor {invoice.get('vendor_name_as_written')!r} does not match "
@@ -80,6 +83,31 @@ def compare(invoice: dict, vendor: dict) -> dict:
     warnings: list[str] = []
     blocking_issues: list[str] = []
     unresolved_evidence: list[str] = []
+
+    # Mandatory Source Integrity Verification (Fail-Closed Invariant)
+    src = invoice.get("source_file")
+    src_sha = invoice.get("source_sha256")
+    src_verified = False
+
+    if not src:
+        blocking_issues.append("Invoice missing source_file")
+    elif not is_safe_relative_path(str(src)):
+        blocking_issues.append(f"source_file contains invalid or unsafe path: {src!r}")
+    else:
+        base = Path(base_dir) if base_dir else Path.cwd()
+        src_path = base / src if not Path(src).is_absolute() else Path(src)
+        if not (src_path.exists() and src_path.is_file()):
+            blocking_issues.append(f"source_file not found on disk: {src}")
+        elif not src_sha or not SHA_RE.match(str(src_sha)):
+            blocking_issues.append(f"Invoice missing or malformed source_sha256: {src_sha!r}")
+        else:
+            calc_sha = sha256_file(str(src_path))
+            if calc_sha.lower() != str(src_sha).lower():
+                blocking_issues.append(
+                    f"source_sha256 mismatch for {src}: calculated {calc_sha} != declared {src_sha}"
+                )
+            else:
+                src_verified = True
 
     seen_line_nos = set()
     written_sum = ZERO
@@ -323,6 +351,9 @@ def compare(invoice: dict, vendor: dict) -> dict:
         "invoice_number": invoice.get("invoice_number"),
         "invoice_date": inv_date.isoformat(),
         "currency": currency,
+        "source_file": src,
+        "source_sha256": src_sha,
+        "source_sha256_verified": src_verified,
         "rounding": "half-up to 2 decimals per line; totals add the rounded lines",
         "taxes_and_freight_unverified": True,
         "lines": lines_out,
@@ -356,10 +387,14 @@ def main() -> int:
     ap.add_argument("invoice_json")
     ap.add_argument("vendor_json")
     ap.add_argument("--out", help="also save the result to this file")
+    ap.add_argument("--save-digest", action="store_true", help="write companion .sha256 digest file beside --out")
     args = ap.parse_args()
     result = compare(load_json(args.invoice_json), load_json(args.vendor_json))
     if args.out:
-        write_json_atomic(args.out, result)
+        if args.save_digest:
+            save_comparison_with_digest(result, args.out)
+        else:
+            write_json_atomic(args.out, result)
     emit(result)
     return 0
 
