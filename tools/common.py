@@ -138,3 +138,5 @@ def run_cli(fn) -> None:
 # Strict UTF-8 file encoding across IO operations
 
 # Guaranteed temporary file cleanup
+
+# Type annotations and docstring specifications
