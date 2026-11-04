@@ -3,3 +3,5 @@ __pycache__/
 .venv/
 *.tmp
 .DS_Store
+
+# Editor and workspace temporary files
