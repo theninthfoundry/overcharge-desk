@@ -325,3 +325,5 @@ The following critical scenarios currently lack automated test coverage in `test
 4. **Broken Root Pytest Discovery**: The duplicate nested directory `overcharge-desk/overcharge-desk/` causes `pytest` to crash on root execution.
 5. **Permissive Input Validation**: `tools/check_invoice.py` does not validate positive values, unique line numbers, or source file existence/integrity.
 
+
+<!-- Forensic Audit: Baseline findings resolved in Phase 1 -->
