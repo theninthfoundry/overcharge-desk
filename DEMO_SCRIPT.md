@@ -118,3 +118,5 @@ column honestly, then set `ENFORCEMENT_LEVEL` in each agent file to match.
 <!-- Pre-filming Case 1 execution runbook -->
 
 <!-- Context wipe verification checklist -->
+
+<!-- Required terminal output captures -->
