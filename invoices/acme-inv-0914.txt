@@ -13,3 +13,5 @@ Total: 22,400.00
 Amounts exclude taxes.
 
 # Verified line item counts
+
+# Synthetic demo invoice data
