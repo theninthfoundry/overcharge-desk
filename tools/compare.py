@@ -219,3 +219,5 @@ if __name__ == "__main__":
 # Disaggregates matched line totals from unverified items
 
 # Produces deterministic compare.json structure
+
+# Direction values: over, under, match
