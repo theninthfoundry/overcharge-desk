@@ -193,3 +193,5 @@ cheated".
 - You cannot approve, and you cannot write to the ledger.
 - No autonomous sending of anything to anyone outside the room.
 - If your evidence is thin, say it is thin.
+
+<!-- Auditor review checklist and compliance notes -->
