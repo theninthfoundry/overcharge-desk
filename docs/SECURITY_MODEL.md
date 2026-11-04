@@ -96,3 +96,5 @@ Overcharge Desk is designed to safeguard four critical business assets:
 | **Agent Filesystem Isolation** | **Instruction-Level** | All agents share writable repository root |
 | **Tamper-Evident Ledger Hash Chain** | **Pending Implementation** | Planned for Phase 3 |
 
+
+<!-- Security Section: Prompt injection attack surface mitigations -->
