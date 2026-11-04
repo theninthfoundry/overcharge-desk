@@ -180,3 +180,5 @@ def test_bad_date_is_an_error(vendor, mk):
     make_invoice, carton, _ = mk
     with pytest.raises(ToolError):
         compare(make_invoice([carton()], invoice_date="03/11/2026"), vendor)
+
+# Tests Decimal calculation accuracy
