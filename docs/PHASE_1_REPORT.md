@@ -136,3 +136,5 @@ python tools/sha.py invoices/acme-inv-1103.txt
 python tools/compare.py tests/fixtures/example_invoice.json vendors/acme.json
 ```
 
+
+<!-- Phase 1 Milestone: Canonical tree verified with 46 passing tests -->
