@@ -141,3 +141,5 @@ write `[MISSING: <field>]` rather than inventing it.
 - No sending, no payments, no ledger changes except through `tools/ledger.py`.
 - State the identity-check level in every decision record. Never claim a
   protection that is not actually in place.
+
+<!-- Formal dispute letter generation instructions -->
