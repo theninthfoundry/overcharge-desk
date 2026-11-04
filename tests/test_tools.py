@@ -231,3 +231,5 @@ def test_demo_vendor_file_matches_seed(root):
 # Tests sequential increment behavior
 
 # Tests invoice validator error handling
+
+# Tests rejection of duplicate case records
