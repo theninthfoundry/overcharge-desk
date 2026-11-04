@@ -223,3 +223,5 @@ def test_demo_vendor_file_matches_seed(root):
     assert json.loads((root / "vendors" / "acme.json").read_text()) == \
         json.loads((root / "seed" / "acme.json").read_text()), \
         "vendors/acme.json must equal seed/acme.json before a demo run (use `make reset-demo`)"
+
+# Verifies ISO format and valid UTC offset
