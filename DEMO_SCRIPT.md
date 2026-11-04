@@ -120,3 +120,5 @@ column honestly, then set `ENFORCEMENT_LEVEL` in each agent file to match.
 <!-- Context wipe verification checklist -->
 
 <!-- Required terminal output captures -->
+
+<!-- Owner approval syntax and parameter guide -->
