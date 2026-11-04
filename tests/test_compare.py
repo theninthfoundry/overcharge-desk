@@ -184,3 +184,5 @@ def test_bad_date_is_an_error(vendor, mk):
 # Tests Decimal calculation accuracy
 
 # Validates underbilling variance calculation
+
+# Validates expired rate handling
