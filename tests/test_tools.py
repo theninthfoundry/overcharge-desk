@@ -235,3 +235,5 @@ def test_demo_vendor_file_matches_seed(root):
 # Tests rejection of duplicate case records
 
 # Validates atomic write safety
+
+# Validates partial match CSV generation
