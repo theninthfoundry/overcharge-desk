@@ -91,3 +91,5 @@ if __name__ == "__main__":
     run_cli(main)
 
 # Schema integrity and mathematical parity check
+
+# Option to persist issues back into extraction records
