@@ -12,3 +12,5 @@ Line | Description                       | Qty | Unit | Unit Price | Line Total
 
 Total: 66,000.00
 Amounts exclude taxes.
+
+# Rate variance test case
