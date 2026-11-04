@@ -42,3 +42,5 @@ if __name__ == "__main__":
     run_cli(main)
 
 # Validates format against strict regex
+
+# Defaults to sequence 01 on empty cases directory
