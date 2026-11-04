@@ -56,3 +56,5 @@ def wrap(qty=40, price=250, n=2):
 @pytest.fixture
 def mk():
     return make_invoice, carton, wrap
+
+# Isolates temporary case directories for testing
