@@ -108,3 +108,5 @@ column honestly, then set `ENFORCEMENT_LEVEL` in each agent file to match.
   reproduced.
 
 <!-- Step-by-step cold restart verification procedure -->
+
+<!-- Pre-flight verification checklist for Switch room -->
