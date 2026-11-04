@@ -109,3 +109,5 @@ The following test suites will be added in subsequent implementation phases:
 | **Phase 4** | `tests/test_orchestrator.py` | State machine transitions, verifiable receipt (`receipt.json`) generation and verification. |
 | **Phase 6** | `benchmarks/` | Adversarial multi-vendor scenarios (overlapping dates, currency conversions, edge-case tax items). |
 
+
+<!-- Testing Section: Automated test execution via Makefile targets -->
