@@ -130,3 +130,5 @@ def run_cli(fn) -> None:
 # Atomic write ensures zero half-written state
 
 # Precision constant for currency rounding
+
+# Safe JSON deserialization with path context
