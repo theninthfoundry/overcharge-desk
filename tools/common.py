@@ -13,6 +13,20 @@ from pathlib import Path
 
 CENT = Decimal("0.01")
 CASE_ID_RE = re.compile(r"^OC-(\d{8})-(\d{2})$")
+CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
+
+# System-level verification states
+STATE_VERIFIED = "VERIFIED"
+STATE_REVIEW_REQUIRED = "REVIEW_REQUIRED"
+STATE_BLOCKED = "BLOCKED"
+
+# Line-level verification states
+STATUS_VERIFIED_MATCH = "VERIFIED_MATCH"
+STATUS_VERIFIED_OVERCHARGE = "VERIFIED_OVERCHARGE"
+STATUS_VERIFIED_UNDERCHARGE = "VERIFIED_UNDERCHARGE"
+STATUS_SOURCE_DISCREPANCY = "SOURCE_DISCREPANCY"
+STATUS_UNMATCHED = "UNMATCHED"
+STATUS_REQUIRES_HUMAN_REVIEW = "REQUIRES_HUMAN_REVIEW"
 
 
 class ToolError(Exception):
@@ -36,6 +50,8 @@ def load_json(path):
 def write_json_atomic(path, data) -> None:
     """Write JSON so a crash can never leave a half-written file."""
     p = Path(path)
+    if not p.parent.exists():
+        p.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=f".{p.name}.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
@@ -55,17 +71,35 @@ def to_decimal(value, what: str = "value") -> Decimal:
     try:
         d = Decimal(str(value).strip())
     except InvalidOperation:
-        raise ToolError(f"{what} is not a number: {value!r}")
+        raise ToolError(f"{what} is not a valid decimal number: {value!r}")
     if not d.is_finite():
         raise ToolError(f"{what} is not a finite number: {value!r}")
     return d
 
 
+def check_positive_decimal(value, what: str = "quantity") -> Decimal:
+    """Validate that a decimal value is strictly positive (> 0)."""
+    d = to_decimal(value, what)
+    if d <= 0:
+        raise ToolError(f"{what} must be positive (> 0), got {value}")
+    return d
+
+
+def check_non_negative_decimal(value, what: str = "amount") -> Decimal:
+    """Validate that a decimal value is non-negative (>= 0)."""
+    d = to_decimal(value, what)
+    if d < 0:
+        raise ToolError(f"{what} cannot be negative, got {value}")
+    return d
+
+
 def q2(d: Decimal) -> Decimal:
+    """Quantize to two decimal places using explicit ROUND_HALF_UP."""
     return d.quantize(CENT, rounding=ROUND_HALF_UP)
 
 
 def money_str(d: Decimal) -> str:
+    """Format decimal as monetary string with two decimal places."""
     return format(q2(d), "f")
 
 
@@ -80,6 +114,7 @@ def exact_str(d: Decimal) -> str:
 
 
 def num_str(d: Decimal) -> str:
+    """Show a quantity formatted cleanly."""
     return format(d.normalize(), "f")
 
 
@@ -111,6 +146,20 @@ def sha256_file(path) -> str:
     return h.hexdigest()
 
 
+def is_safe_relative_path(path_str: str) -> bool:
+    """Reject path traversal attempts (e.g. '..' or absolute paths)."""
+    if not path_str or not isinstance(path_str, str):
+        return False
+    # Check for traversal parts
+    parts = Path(path_str).parts
+    if ".." in parts or Path(path_str).is_absolute():
+        return False
+    # Check for drive colon on Windows
+    if ":" in path_str:
+        return False
+    return True
+
+
 def emit(obj) -> None:
     print(json.dumps(obj, indent=2, ensure_ascii=False))
 
@@ -124,23 +173,3 @@ def run_cli(fn) -> None:
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(exc.code)
     sys.exit(code or 0)
-
-# Custom error boundary for CLI execution
-
-# Atomic write ensures zero half-written state
-
-# Precision constant for currency rounding
-
-# Safe JSON deserialization with path context
-
-# Case ID schema validation rules
-
-# Strict UTF-8 file encoding across IO operations
-
-# Guaranteed temporary file cleanup
-
-# Type annotations and docstring specifications
-
-# Optimized formatting for deterministic output
-
-# PEP 8 compliant formatting validated
