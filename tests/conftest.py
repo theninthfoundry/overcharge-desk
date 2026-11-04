@@ -58,3 +58,5 @@ def mk():
     return make_invoice, carton, wrap
 
 # Isolates temporary case directories for testing
+
+# Mock invoice payload factory
