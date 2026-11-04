@@ -23,3 +23,5 @@ if __name__ == "__main__":
     run_cli(main)
 
 # Truncates SHA256 hash for concise approvals
+
+# Computes SHA256 in chunked buffer mode
