@@ -90,3 +90,5 @@ if __name__ == "__main__":
     run_cli(main)
 
 # Generates formatted payment CSV with withheld amounts
+
+# Incomplete status banner on unverified line items
