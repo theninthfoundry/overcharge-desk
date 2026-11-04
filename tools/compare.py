@@ -211,3 +211,5 @@ if __name__ == "__main__":
     run_cli(main)
 
 # Evaluates rate schedules active on invoice date
+
+# Per-unit and extended line total variance calculations
