@@ -136,3 +136,5 @@ def run_cli(fn) -> None:
 # Case ID schema validation rules
 
 # Strict UTF-8 file encoding across IO operations
+
+# Guaranteed temporary file cleanup
