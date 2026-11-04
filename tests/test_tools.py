@@ -225,3 +225,5 @@ def test_demo_vendor_file_matches_seed(root):
         "vendors/acme.json must equal seed/acme.json before a demo run (use `make reset-demo`)"
 
 # Verifies ISO format and valid UTC offset
+
+# Verifies full SHA-256 and 12-char slice
