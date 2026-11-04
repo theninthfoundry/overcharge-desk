@@ -237,3 +237,5 @@ def test_demo_vendor_file_matches_seed(root):
 # Validates atomic write safety
 
 # Validates partial match CSV generation
+
+# Tests exit code 2 on missing inputs
