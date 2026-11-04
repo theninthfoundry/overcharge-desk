@@ -12,11 +12,15 @@ from __future__ import annotations
 
 import argparse
 import re
+from pathlib import Path
 
-from common import (ToolError, emit, exact_str, load_json, money_str, norm,
-                    num_str, parse_date, q2, run_cli, to_decimal,
-                    write_json_atomic)
+from common import (CENT, ToolError, emit, exact_str, load_json, money_str, norm,
+                    num_str, parse_date, q2, run_cli, to_decimal, write_json_atomic,
+                    STATE_VERIFIED, STATE_REVIEW_REQUIRED, STATE_BLOCKED,
+                    STATUS_VERIFIED_MATCH, STATUS_VERIFIED_OVERCHARGE, STATUS_VERIFIED_UNDERCHARGE,
+                    STATUS_SOURCE_DISCREPANCY, STATUS_UNMATCHED, STATUS_REQUIRES_HUMAN_REVIEW)
 
+SCHEMA_VERSION = "2.0.0"
 ZERO = to_decimal(0)
 
 
@@ -73,103 +77,246 @@ def compare(invoice: dict, vendor: dict) -> dict:
         raise ToolError("Invoice has no lines")
 
     lines_out = []
-    warnings = []
-    m_inv = m_con = m_var = ZERO
-    unmatched_sum = ZERO
-    unmatched_sum_known = True
+    warnings: list[str] = []
+    blocking_issues: list[str] = []
+    unresolved_evidence: list[str] = []
+
+    seen_line_nos = set()
     written_sum = ZERO
     written_sum_known = True
 
+    # Verified metrics (only incremented when line is verified)
+    m_inv = m_con = m_var = ZERO
+    verified_overcharge = ZERO
+    verified_undercharge = ZERO
+
+    unmatched_sum = ZERO
+    unmatched_sum_known = True
+    unmatched_count = 0
+    source_discrepancy_count = 0
+
     for position, ln in enumerate(lines_in, start=1):
         line_no = ln.get("line_no", position)
+        if line_no in seen_line_nos:
+            blocking_issues.append(f"Duplicate line_no {line_no}")
+        seen_line_nos.add(line_no)
+
         desc = ln.get("description")
+        source_ref = ln.get("source_ref") or f"line-{line_no}"
         written = None
         if ln.get("line_total") is not None:
-            written = q2(to_decimal(ln["line_total"], f"line {line_no} line_total"))
-        if written is None:
-            written_sum_known = False
+            try:
+                written_d = to_decimal(ln["line_total"], f"line {line_no} line_total")
+                if written_d < ZERO:
+                    blocking_issues.append(f"Line {line_no}: line_total cannot be negative, got {written_d}")
+                written = q2(written_d)
+                written_sum += written
+            except ToolError as exc:
+                blocking_issues.append(str(exc))
+                written_sum_known = False
         else:
-            written_sum += written
+            written_sum_known = False
 
-        base = {"line_no": line_no, "description": desc}
+        base = {
+            "line_no": line_no,
+            "description": desc,
+            "source_ref": source_ref
+        }
+
         qty_raw, price_raw = ln.get("quantity"), ln.get("unit_price")
-        reason = None
         rate = None
         qty = price = computed = None
+        reason = None
+        line_invalid = False
 
         if qty_raw is None or price_raw is None or not desc:
             reason = "missing description, quantity or unit price in invoice.json"
+            unresolved_evidence.append(f"Line {line_no}: {reason}")
         else:
-            qty = to_decimal(qty_raw, f"line {line_no} quantity")
-            price = to_decimal(price_raw, f"line {line_no} unit_price")
-            computed = q2(qty * price)
-            keys = candidate_item_keys(desc, rates)
-            if not keys:
-                reason = "no contract item matches this description"
-            elif len(keys) > 1:
-                reason = "description matches more than one contract item: " + ", ".join(sorted(keys))
-            else:
-                key = next(iter(keys))
-                inforce = rates_in_force(rates, key, inv_date)
-                if not inforce:
-                    reason = f"no rate in effect on {inv_date.isoformat()} for {key}"
-                elif len(inforce) > 1:
-                    reason = f"contract has overlapping rates for {key} on {inv_date.isoformat()}"
-                else:
-                    rate = inforce[0]
-                    if rate.get("currency") != currency:
-                        raise ToolError(
-                            f"Currency differs on line {line_no}: invoice {currency}, "
-                            f"contract {rate.get('currency')}. Not converting.", 3)
+            try:
+                qty = to_decimal(qty_raw, f"line {line_no} quantity")
+                if qty <= ZERO:
+                    blocking_issues.append(f"Line {line_no}: quantity must be positive (> 0), got {qty}")
+                    line_invalid = True
+            except ToolError as exc:
+                blocking_issues.append(str(exc))
+                line_invalid = True
 
+            try:
+                price = to_decimal(price_raw, f"line {line_no} unit_price")
+                if price < ZERO:
+                    blocking_issues.append(f"Line {line_no}: unit_price cannot be negative, got {price}")
+                    line_invalid = True
+            except ToolError as exc:
+                blocking_issues.append(str(exc))
+                line_invalid = True
+
+            if qty is not None and price is not None and not line_invalid:
+                computed = q2(qty * price)
+
+        # Check internal line arithmetic parity: (written == computed)
+        arithmetic_discrepancy = False
+        if written is not None and computed is not None:
+            if written != computed:
+                arithmetic_discrepancy = True
+                source_discrepancy_count += 1
+                msg = (f"Line {line_no}: source arithmetic discrepancy: quantity ({num_str(qty)}) x "
+                       f"unit price ({exact_str(price)}) = {money_str(computed)} "
+                       f"but line total is written as {money_str(written)}")
+                blocking_issues.append(msg)
+                warnings.append(msg)
+
+        # Attempt contract matching if description and rates exist
+        keys = candidate_item_keys(desc, rates) if (desc and not line_invalid) else set()
+        matched_key = None
+        if not keys and not reason and not line_invalid:
+            reason = "no contract item matches this description"
+            unresolved_evidence.append(f"Line {line_no} ({desc!r}): no contract rate match")
+        elif len(keys) > 1 and not reason and not line_invalid:
+            reason = "description matches more than one contract item: " + ", ".join(sorted(keys))
+            unresolved_evidence.append(f"Line {line_no} ({desc!r}): ambiguous match")
+        elif len(keys) == 1 and not reason and not line_invalid:
+            matched_key = next(iter(keys))
+            inforce = rates_in_force(rates, matched_key, inv_date)
+            if not inforce:
+                reason = f"no rate in effect on {inv_date.isoformat()} for {matched_key}"
+                unresolved_evidence.append(f"Line {line_no}: no rate active on {inv_date.isoformat()}")
+            elif len(inforce) > 1:
+                reason = f"contract has overlapping rates for {matched_key} on {inv_date.isoformat()}"
+                blocking_issues.append(f"Line {line_no}: {reason}")
+            else:
+                rate = inforce[0]
+                if rate.get("currency") != currency:
+                    raise ToolError(
+                        f"Currency differs on line {line_no}: invoice {currency}, "
+                        f"contract {rate.get('currency')}. Not converting.", 3)
+
+        # IF ARITHMETIC DISCREPANCY OR INVALID LINE: Line status MUST be SOURCE_DISCREPANCY (Critical Invariant)
+        if arithmetic_discrepancy or line_invalid:
+            if line_invalid and not arithmetic_discrepancy:
+                source_discrepancy_count += 1
+            lines_out.append({
+                **base,
+                "status": STATUS_SOURCE_DISCREPANCY,
+                "verification_status": STATUS_SOURCE_DISCREPANCY,
+                "contract_matching_status": "matched" if rate else "unmatched",
+                "source_arithmetic_status": "DISCREPANCY",
+                "item_key": rate["item_key"] if rate else matched_key,
+                "clause_ref": rate.get("clause_ref") if rate else None,
+                "quantity": num_str(qty) if qty is not None else (str(qty_raw) if qty_raw is not None else None),
+                "invoiced_unit_price": exact_str(price) if price is not None else (str(price_raw) if price_raw is not None else None),
+                "contract_unit_price": exact_str(to_decimal(rate["unit_price"])) if rate else None,
+                "invoiced_line_total_as_written": money_str(written) if written is not None else None,
+                "invoiced_line_total_computed": money_str(computed) if computed is not None else None,
+                "line_total_matches": False,
+                "discrepancy": (
+                    f"quantity x price = {money_str(computed)} != written {money_str(written)}"
+                    if arithmetic_discrepancy else
+                    f"invalid numeric data on line {line_no}: quantity={qty_raw}, unit_price={price_raw}"
+                ),
+                "blocking": True
+            })
+            continue
+
+        # IF NO CONTRACT RATE: Line is UNMATCHED
         if rate is None:
+            unmatched_count += 1
             amount = written if written is not None else computed
             if amount is None:
                 unmatched_sum_known = False
             else:
                 unmatched_sum += amount
-            lines_out.append({**base, "status": "unmatched", "unmatched_reason": reason,
-                              "invoiced_line_total_as_written": money_str(written) if written is not None else None})
+            lines_out.append({
+                **base,
+                "status": "unmatched",
+                "verification_status": STATUS_UNMATCHED,
+                "contract_matching_status": "unmatched",
+                "source_arithmetic_status": "VERIFIED" if (written is not None and computed is not None and written == computed) else "INCOMPLETE",
+                "unmatched_reason": reason,
+                "invoiced_line_total_as_written": money_str(written) if written is not None else None,
+                "invoiced_line_total_computed": money_str(computed) if computed is not None else None,
+                "line_total_matches": True if (written is not None and computed is not None and written == computed) else None
+            })
             continue
 
+        # VERIFIED LINE: Arithmetic is sound AND contract rate is matched
         contract_price = to_decimal(rate["unit_price"], f"contract price of {rate['item_key']}")
         per_unit = price - contract_price
         line_var = q2(qty * per_unit)
         contract_total = q2(qty * contract_price)
         pct = None
-        if contract_price != 0:
+        if contract_price != ZERO:
             pct = format(q2(per_unit / contract_price * 100), "f")
-        direction = "over" if per_unit > 0 else "under" if per_unit < 0 else "match"
-        total_ok = None if written is None else (written == computed)
-        if total_ok is False:
-            warnings.append(f"Line {line_no}: quantity x unit price = {money_str(computed)} "
-                            f"but line total is written as {money_str(written)}")
+
+        if per_unit > ZERO:
+            direction = "over"
+            v_status = STATUS_VERIFIED_OVERCHARGE
+            verified_overcharge += line_var
+        elif per_unit < ZERO:
+            direction = "under"
+            v_status = STATUS_VERIFIED_UNDERCHARGE
+            verified_undercharge += line_var
+        else:
+            direction = "match"
+            v_status = STATUS_VERIFIED_MATCH
+
         m_inv += computed
         m_con += contract_total
         m_var += line_var
+
         lines_out.append({
-            **base, "status": "matched", "item_key": rate["item_key"], "clause_ref": rate.get("clause_ref"),
-            "quantity": num_str(qty), "invoiced_unit_price": exact_str(price),
-            "contract_unit_price": exact_str(contract_price), "variance_per_unit": exact_str(per_unit),
-            "line_variance": money_str(line_var), "variance_pct": pct, "direction": direction,
+            **base,
+            "status": "matched",
+            "verification_status": v_status,
+            "contract_matching_status": "matched",
+            "source_arithmetic_status": "VERIFIED",
+            "item_key": rate["item_key"],
+            "clause_ref": rate.get("clause_ref"),
+            "quantity": num_str(qty),
+            "unit": ln.get("unit", "unit"),
+            "invoiced_unit_price": exact_str(price),
+            "contract_unit_price": exact_str(contract_price),
+            "variance_per_unit": exact_str(per_unit),
+            "line_variance": money_str(line_var),
+            "variance_pct": pct,
+            "direction": direction,
             "contract_line_total": money_str(contract_total),
             "invoiced_line_total_computed": money_str(computed),
             "invoiced_line_total_as_written": money_str(written) if written is not None else None,
-            "line_total_matches": total_ok,
+            "line_total_matches": True,
         })
 
-    complete = not any(l["status"] == "unmatched" for l in lines_out)
+    # Stated Total vs Sum of Written Lines
+    complete = (unmatched_count == 0 and source_discrepancy_count == 0 and not blocking_issues)
     stated = invoice.get("stated_total")
     stated_d = q2(to_decimal(stated, "stated_total")) if stated is not None else None
     stated_ok = None
     if stated_d is not None and written_sum_known:
-        stated_ok = stated_d == q2(written_sum)
+        stated_ok = (stated_d == q2(written_sum))
         if not stated_ok:
-            warnings.append(f"Stated total {money_str(stated_d)} differs from the sum of line totals "
-                            f"as written, {money_str(written_sum)}")
+            msg = f"Stated total {money_str(stated_d)} differs from the sum of line totals as written, {money_str(written_sum)}"
+            blocking_issues.append(msg)
+            warnings.append(msg)
+
+    # Determine System Verification State
+    if blocking_issues or source_discrepancy_count > 0:
+        verification_status = STATE_BLOCKED
+        if source_discrepancy_count > 0:
+            settlement_status = "PAYMENT_RECOMMENDATION_BLOCKED: SOURCE_DISCREPANCY"
+        else:
+            settlement_status = "PAYMENT_RECOMMENDATION_BLOCKED: INTEGRITY_ERRORS"
+    elif unmatched_count > 0 or not complete:
+        verification_status = STATE_REVIEW_REQUIRED
+        settlement_status = "PAYMENT_RECOMMENDATION_PARTIAL: UNRESOLVED_LINES"
+    else:
+        verification_status = STATE_VERIFIED
+        settlement_status = "GOODS_SUBTOTAL_RECONCILED: TAX_AND_FREIGHT_UNVERIFIED"
 
     return {
         "ok": True,
+        "schema_version": SCHEMA_VERSION,
+        "verification_status": verification_status,
+        "settlement_status": settlement_status,
         "case_id": invoice.get("case_id"),
         "vendor_id": vendor.get("vendor_id"),
         "contract_id": contract.get("contract_id"),
@@ -177,19 +324,29 @@ def compare(invoice: dict, vendor: dict) -> dict:
         "invoice_date": inv_date.isoformat(),
         "currency": currency,
         "rounding": "half-up to 2 decimals per line; totals add the rounded lines",
+        "taxes_and_freight_unverified": True,
         "lines": lines_out,
         "totals": {
             "complete": complete,
+            "verification_status": verification_status,
             "matched_invoiced": money_str(m_inv),
             "matched_per_contract": money_str(m_con),
             "variance_on_matched_lines": money_str(m_var),
+            "verified_overcharge_total": money_str(verified_overcharge),
+            "verified_undercharge_total": money_str(verified_undercharge),
             "unmatched_invoiced_as_written": money_str(unmatched_sum) if unmatched_sum_known else None,
-            "invoiced_total": money_str(m_inv + unmatched_sum) if unmatched_sum_known else None,
+            "invoiced_total": money_str(m_inv + unmatched_sum) if (unmatched_sum_known and source_discrepancy_count == 0) else None,
             "per_contract_total": money_str(m_con) if complete else None,
+            "goods_subtotal_invoiced_written": money_str(written_sum) if written_sum_known else None,
+            "goods_subtotal_contract": money_str(m_con) if complete else None,
             "stated_total_as_written": money_str(stated_d) if stated_d is not None else None,
             "sum_of_line_totals_as_written": money_str(written_sum) if written_sum_known else None,
             "stated_total_matches": stated_ok,
+            "source_discrepancy_count": source_discrepancy_count,
+            "unmatched_line_count": unmatched_count,
         },
+        "blocking_issues": blocking_issues,
+        "unresolved_evidence": unresolved_evidence,
         "warnings": warnings,
     }
 
@@ -209,15 +366,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     run_cli(main)
-
-# Evaluates rate schedules active on invoice date
-
-# Per-unit and extended line total variance calculations
-
-# Computes directional drift: over, under, or match
-
-# Disaggregates matched line totals from unverified items
-
-# Produces deterministic compare.json structure
-
-# Direction values: over, under, match
