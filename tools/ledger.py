@@ -116,3 +116,5 @@ if __name__ == "__main__":
 # Stamps ISO-8601 creation time automatically
 
 # Appends vendor outcome and credit note tracking
+
+# Atomic write prevents corrupted vendor state
