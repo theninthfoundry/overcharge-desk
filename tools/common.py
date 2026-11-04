@@ -147,17 +147,82 @@ def sha256_file(path) -> str:
 
 
 def is_safe_relative_path(path_str: str) -> bool:
-    """Reject path traversal attempts (e.g. '..' or absolute paths)."""
+    """Reject path traversal attempts across Windows and POSIX systems.
+    
+    Prevents:
+    - Parent directory traversal ('..' segments via '/' or '\\')
+    - Absolute paths ('/etc/passwd', '\\windows\\system32', 'C:\\...')
+    - Windows drive letters and alternate data streams (':')
+    - UNC network shares ('//server/share' or '\\\\server\\share')
+    """
     if not path_str or not isinstance(path_str, str):
         return False
-    # Check for traversal parts
-    parts = Path(path_str).parts
-    if ".." in parts or Path(path_str).is_absolute():
+    s = str(path_str).strip()
+    if not s:
         return False
-    # Check for drive colon on Windows
-    if ":" in path_str:
+    # Normalize backslashes to forward slashes for cross-platform checking
+    norm_path = s.replace("\\", "/")
+    # Reject leading slashes (POSIX root or UNC)
+    if norm_path.startswith("/"):
+        return False
+    # Reject Windows drive colons or ADS
+    if ":" in norm_path:
+        return False
+    # Check for '..' path segments
+    segments = [seg for seg in norm_path.split("/") if seg and seg != "."]
+    if ".." in segments:
         return False
     return True
+
+
+def canonical_json_bytes(obj: dict) -> bytes:
+    """Deterministic, sorted-key UTF-8 byte serialization for cryptographic hashing."""
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def hash_comparison_result(obj: dict) -> str:
+    """Compute the full 64-character SHA-256 hex digest of a comparison result."""
+    return hashlib.sha256(canonical_json_bytes(obj)).hexdigest()
+
+
+def save_comparison_with_digest(result: dict, json_path: Path | str) -> str:
+    """Save comparison JSON atomically and write a companion .sha256 digest file.
+    
+    Returns the calculated 64-character SHA-256 digest.
+    """
+    jp = Path(json_path)
+    write_json_atomic(jp, result)
+    digest = hash_comparison_result(result)
+    digest_path = Path(f"{jp}.sha256")
+    with open(digest_path, "w", encoding="utf-8") as fh:
+        fh.write(digest + "\n")
+    return digest
+
+
+def verify_comparison_digest_file(json_path: Path | str, digest_path: Path | str | None = None) -> tuple[bool, str, str]:
+    """Verify that a comparison result matches its recorded .sha256 companion file.
+    
+    Returns: (is_valid, calculated_digest, recorded_digest)
+    """
+    jp = Path(json_path)
+    dp = Path(digest_path) if digest_path else Path(f"{jp}.sha256")
+    if not jp.exists():
+        raise ToolError(f"Comparison JSON not found: {jp}")
+    if not dp.exists():
+        raise ToolError(f"Companion digest file not found: {dp}")
+    
+    try:
+        data = load_json(jp)
+        calc = hash_comparison_result(data)
+    except Exception as exc:
+        raise ToolError(f"Failed to read or hash comparison JSON: {exc}")
+        
+    try:
+        recorded = dp.read_text(encoding="utf-8").strip()
+    except Exception as exc:
+        raise ToolError(f"Failed to read digest file: {exc}")
+        
+    return (calc.lower() == recorded.lower(), calc, recorded)
 
 
 def emit(obj) -> None:
