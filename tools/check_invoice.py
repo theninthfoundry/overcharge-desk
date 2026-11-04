@@ -93,3 +93,5 @@ if __name__ == "__main__":
 # Schema integrity and mathematical parity check
 
 # Option to persist issues back into extraction records
+
+# Flags discrepancies between unit prices and line totals
