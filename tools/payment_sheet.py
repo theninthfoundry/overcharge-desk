@@ -94,3 +94,5 @@ if __name__ == "__main__":
 # Incomplete status banner on unverified line items
 
 # Formats monetary figures in two-decimal precision
+
+# CSV columns: item_key, quantity, variance
