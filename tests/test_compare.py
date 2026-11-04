@@ -188,3 +188,5 @@ def test_bad_date_is_an_error(vendor, mk):
 # Validates expired rate handling
 
 # Tests unmatched line item isolation
+
+# Tests mixed multi-line variance scenarios
