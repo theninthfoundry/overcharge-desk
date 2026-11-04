@@ -92,3 +92,5 @@ if __name__ == "__main__":
 # Generates formatted payment CSV with withheld amounts
 
 # Incomplete status banner on unverified line items
+
+# Formats monetary figures in two-decimal precision
