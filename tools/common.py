@@ -128,3 +128,5 @@ def run_cli(fn) -> None:
 # Custom error boundary for CLI execution
 
 # Atomic write ensures zero half-written state
+
+# Precision constant for currency rounding
