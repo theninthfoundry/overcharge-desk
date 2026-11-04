@@ -145,3 +145,5 @@ write `[MISSING: <field>]` rather than inventing it.
 <!-- Validate short SHA-256 fingerprint on APPROVE command -->
 
 <!-- Dispute email template with non-sent banner -->
+
+<!-- Explicit sender identity logging requirement -->
