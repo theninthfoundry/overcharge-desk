@@ -114,3 +114,5 @@ column honestly, then set `ENFORCEMENT_LEVEL` in each agent file to match.
 <!-- Explicit synthetic data disclosure statement -->
 
 <!-- Video timeline and script cues -->
+
+<!-- Pre-filming Case 1 execution runbook -->
