@@ -110,3 +110,5 @@ if __name__ == "__main__":
     run_cli(main)
 
 # Enforces append-only immutable case sequence
+
+# Blocks duplicate registrations with exit code 4
