@@ -44,3 +44,5 @@ if __name__ == "__main__":
 # Validates format against strict regex
 
 # Defaults to sequence 01 on empty cases directory
+
+# Case ID generation utility helper
