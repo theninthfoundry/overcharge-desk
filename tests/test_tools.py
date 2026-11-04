@@ -229,3 +229,5 @@ def test_demo_vendor_file_matches_seed(root):
 # Verifies full SHA-256 and 12-char slice
 
 # Tests sequential increment behavior
+
+# Tests invoice validator error handling
