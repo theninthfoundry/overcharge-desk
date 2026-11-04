@@ -114,3 +114,5 @@ if __name__ == "__main__":
 # Blocks duplicate registrations with exit code 4
 
 # Stamps ISO-8601 creation time automatically
+
+# Appends vendor outcome and credit note tracking
