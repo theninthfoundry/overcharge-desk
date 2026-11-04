@@ -134,3 +134,5 @@ def run_cli(fn) -> None:
 # Safe JSON deserialization with path context
 
 # Case ID schema validation rules
+
+# Strict UTF-8 file encoding across IO operations
