@@ -213,3 +213,5 @@ All operations are executable directly from the repository root:
 
 
 <!-- Architecture Section: Decoupled LLM extraction and deterministic math -->
+
+<!-- Architecture Section: Sequential case ID formatting and lifecycle -->
