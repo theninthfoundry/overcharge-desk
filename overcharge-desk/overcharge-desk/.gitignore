@@ -1,7 +1,0 @@
-__pycache__/
-.pytest_cache/
-.venv/
-*.tmp
-.DS_Store
-
-# Temporary test artifacts and caches
