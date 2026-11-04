@@ -153,3 +153,4 @@ Under Phase 2.1:
 | 7 | Deterministic Rate Comparison | `compare()` |
 | 8 | Canonical Digest & Schema Validation | `save_comparison_with_digest()` & `validate_comparison()` |
 | 9 | Authorized Artifact Generation | `payment_sheet.py` (`VERIFIED`), `partial_review.py` (`REVIEW_REQUIRED`), or `blocked_review_report.py` (`BLOCKED`) |
+
