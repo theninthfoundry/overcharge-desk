@@ -106,3 +106,5 @@ column honestly, then set `ENFORCEMENT_LEVEL` in each agent file to match.
   agent errs, show the failure handling; that is part of the point.
 - Keep the README's "how to run" to three commands, so it can be cloned and
   reproduced.
+
+<!-- Step-by-step cold restart verification procedure -->
