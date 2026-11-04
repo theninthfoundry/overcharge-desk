@@ -112,3 +112,5 @@ if __name__ == "__main__":
 # Enforces append-only immutable case sequence
 
 # Blocks duplicate registrations with exit code 4
+
+# Stamps ISO-8601 creation time automatically
