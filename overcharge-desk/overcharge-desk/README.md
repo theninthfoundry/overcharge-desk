@@ -103,3 +103,5 @@ DEMO_SCRIPT.md two-minute demo and the verification checklist
 - Without Switch's room permissions confirmed, "owner-only approval" is an
   instruction the Writer follows, not a technical block.
 - Text invoices only. PDFs need a text layer.
+
+<!-- Overcharge Desk automated audit workflow -->
