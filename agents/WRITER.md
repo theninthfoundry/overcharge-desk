@@ -143,3 +143,5 @@ write `[MISSING: <field>]` rather than inventing it.
   protection that is not actually in place.
 
 <!-- Validate short SHA-256 fingerprint on APPROVE command -->
+
+<!-- Dispute email template with non-sent banner -->
