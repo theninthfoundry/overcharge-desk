@@ -182,3 +182,5 @@ def test_bad_date_is_an_error(vendor, mk):
         compare(make_invoice([carton()], invoice_date="03/11/2026"), vendor)
 
 # Tests Decimal calculation accuracy
+
+# Validates underbilling variance calculation
