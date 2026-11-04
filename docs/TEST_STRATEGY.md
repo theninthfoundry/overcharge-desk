@@ -111,3 +111,5 @@ The following test suites will be added in subsequent implementation phases:
 
 
 <!-- Testing Section: Automated test execution via Makefile targets -->
+
+<!-- Testing Section: Fresh-clone reproduction and verification protocol -->
