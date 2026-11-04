@@ -48,6 +48,8 @@ from common import (
 from check_invoice import find_issues
 from compare import compare
 from payment_sheet import build_rows, safe_text
+from partial_review import build_partial_review_rows
+from blocked_review_report import build_blocked_rows
 
 
 # ---------------------------------------------------------------------------
@@ -476,11 +478,17 @@ def test_scenario_25_unmatched_item_mixed_with_matched_items(vendor, mk):
     assert r["lines"][1]["verification_status"] == STATUS_UNMATCHED
     assert r["lines"][1]["status"] in ("unmatched", STATUS_UNMATCHED)
     
-    rows, summary = build_rows(r)
-    assert summary["complete"] is False
-    assert summary["unverified_lines"] == 1
-    assert rows[1][6] == ""  # Payable is empty for unmatched line
-    assert "UNVERIFIED" in rows[1][8]
+    # Payment sheet generator must refuse REVIEW_REQUIRED results
+    with pytest.raises(ToolError) as exc_info:
+        build_rows(r)
+    assert exc_info.value.code == 2
+
+    # Partial review generator handles it with explicit REVIEW_REQUIRED artifact
+    rows, summary = build_partial_review_rows(r)
+    assert summary["artifact_type"] == "partial_review"
+    assert summary["has_final_payment_recommendation"] is False
+    assert summary["unmatched_lines"] == 1
+    assert "REVIEW REQUIRED" in rows[-1][1]
 
 
 # ---------------------------------------------------------------------------
@@ -598,14 +606,16 @@ def test_scenario_33_payment_sheet_attempt_on_blocked_result(vendor, mk):
     r = compare(inv, vendor)
     assert r["verification_status"] == STATE_BLOCKED
     
+    # Payment sheet must strictly fail closed (no overrides permitted)
     with pytest.raises(ToolError) as exc_info:
         build_rows(r)
     assert exc_info.value.code == 2
     
-    # Can only build if explicitly requesting a blocked draft
-    rows, summary = build_rows(r, allow_blocked_draft=True)
-    assert "BLOCKED" in rows[-1][1]
-    assert summary["complete"] is False
+    # Blocked review report produces investigative evidence with NO payable amounts
+    rows, summary = build_blocked_rows(r)
+    assert summary["artifact_type"] == "blocked_review_report"
+    assert summary["has_payable_recommendation"] is False
+    assert "BLOCKED AUDIT" in rows[-1][1]
 
 
 # ---------------------------------------------------------------------------
@@ -618,10 +628,17 @@ def test_scenario_34_payment_sheet_attempt_on_incomplete_result(vendor, mk):
     r = compare(inv, vendor)
     assert r["verification_status"] == STATE_REVIEW_REQUIRED
     
-    rows, summary = build_rows(r)
-    assert summary["complete"] is False
-    assert "INCOMPLETE" in rows[-1][1]
-    assert summary["unverified_lines"] == 1
+    # Payment sheet generator strictly refuses REVIEW_REQUIRED results
+    with pytest.raises(ToolError) as exc_info:
+        build_rows(r)
+    assert exc_info.value.code == 2
+    
+    # Partial review generator produces review artifact
+    rows, summary = build_partial_review_rows(r)
+    assert summary["artifact_type"] == "partial_review"
+    assert summary["has_final_payment_recommendation"] is False
+    assert "REVIEW REQUIRED" in rows[-1][1]
+    assert summary["unmatched_lines"] == 1
 
 
 # ---------------------------------------------------------------------------

@@ -117,13 +117,22 @@ def test_payment_sheet_demo_numbers(vendor, mk, tmp_path):
     assert rows[1][6] == "10000.00" and rows[1][7] == "0.00"      # wrap line matches
 
 
+from partial_review import build_partial_review_rows
+
+
 def test_payment_sheet_unmatched_is_marked_incomplete(vendor, mk):
     make_invoice, carton, _ = mk
     odd = {"line_no": 2, "description": "Mystery item", "quantity": 3, "unit_price": 10, "line_total": 30}
-    rows, summary = build_rows(compare(make_invoice([carton(), odd]), vendor))
-    assert summary["complete"] is False and summary["unverified_lines"] == 1
-    assert rows[1][6] == "" and "UNVERIFIED" in rows[1][8]
-    assert "INCOMPLETE" in rows[-1][1]
+    comp = compare(make_invoice([carton(), odd]), vendor)
+    # Payment sheet must strictly refuse REVIEW_REQUIRED results
+    with pytest.raises(ToolError) as exc_info:
+        build_rows(comp)
+    assert exc_info.value.code == 2
+
+    # Partial review handles it cleanly
+    rows, summary = build_partial_review_rows(comp)
+    assert summary["unmatched_lines"] == 1
+    assert "REVIEW REQUIRED" in rows[-1][1]
 
 
 def test_payment_sheet_under_billing_pays_as_invoiced(vendor, mk):
@@ -134,7 +143,7 @@ def test_payment_sheet_under_billing_pays_as_invoiced(vendor, mk):
 
 def test_payment_sheet_blocks_formula_injection(vendor, mk):
     make_invoice, carton, _ = mk
-    evil = {"line_no": 2, "description": "=HYPERLINK(\"http://x\")", "quantity": 1, "unit_price": 1, "line_total": 1}
+    evil = carton(1, 100, desc="=HYPERLINK(\"http://x\") CC-5", n=2)
     rows, _ = build_rows(compare(make_invoice([carton(), evil]), vendor))
     assert rows[1][1].startswith("'=")
 
