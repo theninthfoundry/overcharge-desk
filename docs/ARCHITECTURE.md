@@ -211,3 +211,5 @@ All operations are executable directly from the repository root:
 | **Case State Machine** | Implicit file existence | Explicit orchestrator states (`RECEIVED` ➔ `VALIDATED` ➔ `REVIEW` ➔ `RESOLVED`) |
 | **Traceable Decision Receipt** | None (separate markdown/CSV files) | Single verifiable `receipt.json` summarizing all artifact hashes |
 
+
+<!-- Architecture Section: Decoupled LLM extraction and deterministic math -->
