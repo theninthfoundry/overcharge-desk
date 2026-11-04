@@ -122,3 +122,5 @@ column honestly, then set `ENFORCEMENT_LEVEL` in each agent file to match.
 <!-- Required terminal output captures -->
 
 <!-- Owner approval syntax and parameter guide -->
+
+<!-- Split screen demonstration outline -->
