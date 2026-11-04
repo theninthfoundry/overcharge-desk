@@ -118,3 +118,5 @@ if __name__ == "__main__":
 # Appends vendor outcome and credit note tracking
 
 # Atomic write prevents corrupted vendor state
+
+# Outcome update procedure
