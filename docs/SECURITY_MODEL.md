@@ -98,3 +98,5 @@ Overcharge Desk is designed to safeguard four critical business assets:
 
 
 <!-- Security Section: Prompt injection attack surface mitigations -->
+
+<!-- Security Section: Formula injection sanitization via safe_text -->
