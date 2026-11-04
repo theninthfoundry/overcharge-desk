@@ -15,3 +15,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     run_cli(main)
+
+# Formats current UTC timestamp as ISO-8601
