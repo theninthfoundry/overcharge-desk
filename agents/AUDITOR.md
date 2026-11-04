@@ -195,3 +195,5 @@ cheated".
 - If your evidence is thin, say it is thin.
 
 <!-- Mental math is prohibited; use compare.py -->
+
+<!-- Check vendor history for prior credit note tokens -->
