@@ -1,7 +1,31 @@
+# Python bytecode & caches
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
 .pytest_cache/
-.venv/
-*.tmp
-.DS_Store
+.coverage
+htmlcov/
+.tox/
 
-# Editor and workspace temporary files
+# Environments
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Ephemeral artifacts & cases
+cases/OC-*
+*.tmp
+*.bak
+
+# System & Editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
