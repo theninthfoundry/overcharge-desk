@@ -98,3 +98,5 @@ All agents (Claude Code, OpenAI Codex, Antigravity, and any other automated or h
 <!-- Invariant Rule 1.1: Exact Decimal arithmetic enforced across all modules -->
 
 <!-- Invariant Rule 2.1: Immutable source locator formatting standards -->
+
+<!-- Invariant Rule 3.1: Full 64-char SHA256 cryptographic digest binding -->
