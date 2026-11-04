@@ -15,3 +15,5 @@ reset-demo:
 	cp seed/acme.json vendors/acme.json
 	rm -rf cases/OC-*
 	@echo "Demo state reset."
+
+# Build and test automation targets
