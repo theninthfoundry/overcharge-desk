@@ -112,3 +112,5 @@ column honestly, then set `ENFORCEMENT_LEVEL` in each agent file to match.
 <!-- Pre-flight verification checklist for Switch room -->
 
 <!-- Explicit synthetic data disclosure statement -->
+
+<!-- Video timeline and script cues -->
