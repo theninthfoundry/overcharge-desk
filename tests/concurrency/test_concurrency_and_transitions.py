@@ -101,3 +101,21 @@ def test_terminal_state_closed_rejects_transitions(case_file):
         )
 
 
+def test_invalid_transition_from_blocked(case_file):
+    """BLOCKED cases cannot transition to APPROVED or PAYMENT_INSTRUCTION_READY."""
+    CaseLifecycleManager.transition(
+        case_file,
+        to_state=CaseState.BLOCKED,
+        actor_id="system",
+        reason="Arithmetic error",
+    )
+    with pytest.raises(InvalidStateTransitionError):
+        CaseLifecycleManager.transition(
+            case_file,
+            to_state=CaseState.APPROVED,
+            actor_id="approver",
+            reason="Bypass block",
+        )
+
+
+
