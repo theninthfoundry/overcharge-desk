@@ -26,7 +26,7 @@ from state_model import ApprovalStatus, CommercialStatus, PaymentRecommendationS
 
 # Import directly from existing Python engine in tools/
 from approval_gateway import process_approval_decision
-from auth import issue_actor_token, load_actors_config
+from auth import get_default_key_dir, get_default_key_path, issue_actor_token, load_actors_config
 from export_audit_package import export_case_audit, verify_package_integrity
 from pipeline import run_pipeline
 
@@ -45,8 +45,8 @@ class CaseService:
         self.cases_dir = Path(cases_dir) if cases_dir else self.base_dir / "cases"
         self.storage = CaseStorage(self.cases_dir)
         self.auth_service = auth_service or AuthorizationService(enforce_strict_separation_of_duties=True)
-        self.key_manager = KeyManager(config_dir=self.base_dir / "config")
-        self.key_file = Path(key_file) if key_file else self.base_dir / "config" / "signing.key"
+        self.key_manager = KeyManager(config_dir=get_default_key_dir())
+        self.key_file = Path(key_file) if key_file else get_default_key_path()
         self.actors_cfg_file = self.base_dir / "config" / "actors.json"
         self.payment_service = PaymentService(auth_service=self.auth_service)
 
