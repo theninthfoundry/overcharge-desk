@@ -34,6 +34,7 @@ EVIDENCE_TYPES = (
     "extracted_invoice",
     "vendor_contract",
     "comparison_result",
+    "verification_record",
     "payment_artifact",
     "review_artifact",
     "blocked_report",
@@ -117,11 +118,6 @@ def register_evidence(
     else:
         case_id = registry.get("case_id") or "OC-UNKNOWN"
 
-    # Compute sequential evidence_id: EV-{case_id}-{seq:03d}
-    existing_evidence = registry.get("evidence", [])
-    seq = len(existing_evidence) + 1
-    evidence_id = f"EV-{case_id}-{seq:03d}"
-
     # Try storing relative path if inside case_dir or base_dir
     stored_path: str
     try:
@@ -131,6 +127,30 @@ def register_evidence(
             stored_path = str(resolved_path.relative_to(c_dir.resolve())).replace("\\", "/")
         except ValueError:
             stored_path = str(resolved_path).replace("\\", "/")
+
+    # Check if this exact artifact is already registered; update if so to maintain 1:1 parity with current disk state
+    existing_record = None
+    for item in registry.get("evidence", []):
+        if item.get("stored_path") == stored_path or (
+            item.get("evidence_type") == evidence_type and item.get("original_filename") == resolved_path.name
+        ):
+            existing_record = item
+            break
+
+    if existing_record:
+        existing_record["content_hash"] = content_hash
+        existing_record["byte_size"] = byte_size
+        existing_record["received_at"] = utc_now_iso()
+        existing_record["validation_status"] = "VERIFIED"
+        if description:
+            existing_record["description"] = description
+        save_registry(c_dir, registry)
+        return existing_record
+
+    # Compute sequential evidence_id: EV-{case_id}-{seq:03d}
+    existing_evidence = registry.get("evidence", [])
+    seq = len(existing_evidence) + 1
+    evidence_id = f"EV-{case_id}-{seq:03d}"
 
     record = {
         "evidence_id": evidence_id,
