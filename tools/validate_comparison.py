@@ -181,6 +181,7 @@ def validate_comparison(result: dict, companion_digest_file: Path | str | None =
                 issues.append(f"Line {l_no}: numeric validation failure: {exc}")
 
     # 4. Totals reconciliation
+    # Mathematical Parity: Sum of quantized line items must equal aggregated totals
     try:
         if "matched_invoiced" in totals and totals["matched_invoiced"] is not None:
             tot_inv = to_decimal(totals["matched_invoiced"], "totals.matched_invoiced")
