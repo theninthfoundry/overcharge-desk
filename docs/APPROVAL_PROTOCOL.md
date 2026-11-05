@@ -113,3 +113,22 @@ flowchart TD
     F -- No --> R6["Refuse (Exit 4): Amount Mismatch"]
     F -- Yes --> G["Sign Canonical Approval Receipt"]
 ```
+
+---
+
+## 5. Out-of-Band Interactive Terminal Authorization (`tools/approve.py`)
+
+To eliminate the vulnerability where agents sharing a shell process or chat room might attempt to approve payments autonomously, Overcharge Desk enforces an out-of-band terminal protocol:
+
+1. **Mandatory Interactive TTY Gate**:
+   `tools/approve.py` inspects `sys.stdin.isatty()`. Subshell invocations, pipes (`|`), redirects (`<`), and headless background agents are refused fail-closed with exit code 4.
+2. **Argon2id Password Authentication**:
+   Prompts the human owner for credentials using `getpass.getpass()`, verifying against the persistent SQLite store (`IdentityRepository`) using memory-hard Argon2id.
+3. **Role Validation**:
+   Requires explicit `APPROVER` or `ADMINISTRATOR` authority.
+4. **Server-Side Calculated Amount**:
+   The payable subtotal is derived directly from `compare.json` on disk; manual caller-provided payment figures are strictly checked against deterministic math.
+5. **Full 64-Character SHA-256 Receipt**:
+   Emits the unshortened cryptographic hash and formats a verified notification message for the owner to paste into the Switch room.
+6. **No Agent Approval Command**:
+   `tools/desk.py` strictly omits an `approve` subcommand; AI agents cannot trigger or execute financial approvals.
