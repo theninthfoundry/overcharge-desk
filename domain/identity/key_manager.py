@@ -110,6 +110,7 @@ class KeyManager:
                 )
 
     def _save_manifest(self, manifest_data: dict) -> None:
+        """Atomically persist key manifest to disk, preventing half-written states."""
         write_json_atomic(self.manifest_file, manifest_data)
 
     def get_active_key(self) -> Tuple[str, bytes]:
