@@ -339,6 +339,7 @@ def run_pipeline(
                 pass
 
     # Stage 13: Write Execution Manifest for crash recovery and audit
+    # Crash Recovery: Records stage results and artifact digests to support safe resumption
     completed_at = utc_now_iso()
     manifest = {
         "manifest_version": "1.0.0",
