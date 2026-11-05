@@ -101,6 +101,7 @@ class CaseLifecycleManager:
         event_id: Optional[str] = None,
         evidence_version: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """Atomically transition a case state, recording audit history and checking concurrency."""
         p = Path(case_file)
         if not p.exists():
             raise ToolError(f"Case metadata file '{p}' not found", 2)
