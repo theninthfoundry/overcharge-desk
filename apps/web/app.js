@@ -626,11 +626,11 @@ function renderCasesTableHtml(cases) {
       <div class="empty-state m-4">
         <div class="font-semibold text-xs">No Reconciliation Cases Found</div>
         <p class="text-xs mt-1" style="color: var(--text-secondary);">
-          Create a new vendor invoice intake case or reset the canonical benchmark dataset in Settings.
+          Workspace is in its clean base state. Register a vendor or create a new invoice intake case to begin reconciliation.
         </p>
         <div class="mt-3 flex justify-center gap-2">
           <button type="button" onclick="navigateSection('new-case')" class="btn btn-primary btn-sm">New Intake Case</button>
-          <button type="button" onclick="resetDemoDataset()" class="btn btn-secondary btn-sm">Load 6 Benchmark Cases</button>
+          <button type="button" onclick="navigateSection('vendors')" class="btn btn-secondary btn-sm">Register Vendor</button>
         </div>
       </div>
     `;
@@ -1614,44 +1614,74 @@ async function triggerExportAuditPackage(caseId) {
  * SECTION 3: NEW INTAKE CASE
  * ========================================================================== */
 
+function computeNextCaseId() {
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const seq = String((STATE.cases || []).length + 1).padStart(2, '0');
+  return `OC-${today}-${seq}`;
+}
+
+function generateNewCaseIdInput() {
+  const cidEl = document.getElementById('nc-case-id');
+  if (cidEl) cidEl.value = computeNextCaseId();
+}
+
 async function initNewCaseSection() {
   await loadVendorsDataSilent();
-  const vSel = document.getElementById('nc-vendor-id');
-  if (vSel) {
-    const prevVal = vSel.value;
-    vSel.innerHTML = (STATE.vendors || [])
-      .map((v) => `<option value="${escapeHtml(v.vendor_id)}">${escapeHtml(v.vendor_name)} (${escapeHtml(v.vendor_id)})</option>`)
+  const dl = document.getElementById('nc-vendor-datalist');
+  if (dl) {
+    dl.innerHTML = (STATE.vendors || [])
+      .map((v) => `<option value="${escapeHtml(v.vendor_id)}">${escapeHtml(v.vendor_name)}</option>`)
       .join('');
-    if (prevVal && (STATE.vendors || []).some((v) => v.vendor_id === prevVal)) {
-      vSel.value = prevVal;
+  }
+  const cidEl = document.getElementById('nc-case-id');
+  if (cidEl && !cidEl.value.trim()) {
+    cidEl.value = computeNextCaseId();
+  }
+  const vInput = document.getElementById('nc-vendor-id');
+  if (vInput && !vInput.value.trim() && (STATE.vendors || []).length > 0) {
+    vInput.value = STATE.vendors[0].vendor_id;
+    const vNameEl = document.getElementById('nc-vendor-name');
+    if (vNameEl && !vNameEl.value.trim()) {
+      vNameEl.value = STATE.vendors[0].vendor_name || '';
     }
   }
   renderNewCaseContractPreview();
   const tbody = document.getElementById('nc-lines-tbody');
   if (tbody && tbody.children.length === 0) {
-    populateSampleOverchargeForm();
+    addNewCaseLineRow();
   }
 }
 
 function getSelectedNewCaseVendor() {
-  const vid = document.getElementById('nc-vendor-id')?.value || 'acme';
-  return (STATE.vendors || []).find((v) => v.vendor_id === vid) || (STATE.vendors || [])[0] || null;
+  const vid = (document.getElementById('nc-vendor-id')?.value || '').trim().toLowerCase();
+  if (!vid) return null;
+  return (STATE.vendors || []).find((v) => v.vendor_id.toLowerCase() === vid) || null;
 }
 
 function onNewCaseVendorChange() {
+  const vendor = getSelectedNewCaseVendor();
+  const vNameEl = document.getElementById('nc-vendor-name');
+  if (vendor && vNameEl) {
+    vNameEl.value = vendor.vendor_name || '';
+  }
   renderNewCaseContractPreview();
-  populateSampleOverchargeForm();
 }
 
 function renderNewCaseContractPreview() {
   const vendor = getSelectedNewCaseVendor();
+  const vid = (document.getElementById('nc-vendor-id')?.value || '').trim();
   const titleEl = document.getElementById('nc-contract-preview-title');
   const listEl = document.getElementById('nc-contract-preview-list');
   const currSel = document.getElementById('nc-currency');
   if (!listEl) return;
 
   if (!vendor) {
-    listEl.textContent = 'No vendor contract loaded.';
+    if (titleEl) {
+      titleEl.textContent = vid ? `New Vendor Profile — ${vid}` : 'Live Vendor Schedule A Reference';
+    }
+    listEl.innerHTML = vid
+      ? `Vendor <code>${escapeHtml(vid)}</code> is not registered yet. Entering a <strong>Contract Rate (Schedule A)</strong> on line items below will automatically provision the vendor profile, contract markdown, and verified treasury destination upon submission.`
+      : 'Enter a registered Vendor ID above (or type a new Vendor ID + Contract Rate per line to auto-provision its Schedule A contract).';
     return;
   }
   if (currSel && vendor.currency) {
@@ -1662,7 +1692,7 @@ function renderNewCaseContractPreview() {
   }
   const rates = vendor.rates || [];
   if (rates.length === 0) {
-    listEl.innerHTML = 'No contracted SKU rates registered for this vendor.';
+    listEl.innerHTML = 'No contracted SKU rates registered for this vendor yet. Specify Contract Rate on line items to add to Schedule A.';
     return;
   }
   listEl.innerHTML = rates
@@ -1678,20 +1708,22 @@ function addNewCaseLineRow(item) {
   const tbody = document.getElementById('nc-lines-tbody');
   if (!tbody) return;
   const vendor = getSelectedNewCaseVendor();
-  const firstRate = (vendor?.rates || [])[0] || { sku: 'CC-5', description: 'Corrugated carton, 5-ply (CC-5)', unit_price: '100.00' };
+  const firstRate = (vendor?.rates || [])[0] || null;
   const rowItem = item || {
-    item_code: firstRate.sku || firstRate.item_code,
-    description: firstRate.description,
-    quantity: '100',
-    unit_price: Number(firstRate.unit_price || 100).toFixed(2),
-    line_total: (100 * Number(firstRate.unit_price || 100)).toFixed(2),
+    item_code: firstRate ? (firstRate.sku || firstRate.item_code) : '',
+    description: firstRate ? firstRate.description : '',
+    quantity: '1',
+    unit_price: firstRate ? Number(firstRate.unit_price || 0).toFixed(2) : '',
+    contract_unit_price: firstRate ? Number(firstRate.unit_price || 0).toFixed(2) : '',
+    line_total: firstRate ? Number(firstRate.unit_price || 0).toFixed(2) : '0.00',
   };
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td><input type="text" class="input-field mono nc-line-sku" required value="${escapeHtml(rowItem.item_code)}" placeholder="${escapeHtml(firstRate.sku || 'CC-5')}"></td>
+    <td><input type="text" class="input-field mono nc-line-sku" required value="${escapeHtml(rowItem.item_code)}" placeholder="e.g. SKU-101"></td>
     <td><input type="text" class="input-field nc-line-desc" required value="${escapeHtml(rowItem.description)}" placeholder="Item description"></td>
     <td><input type="text" class="input-field mono num-col nc-line-qty" required value="${escapeHtml(rowItem.quantity)}" oninput="recalcNewCaseLineRow(this)"></td>
-    <td><input type="text" class="input-field mono num-col nc-line-price" required value="${escapeHtml(rowItem.unit_price)}" oninput="recalcNewCaseLineRow(this)"></td>
+    <td><input type="text" class="input-field mono num-col nc-line-price" required value="${escapeHtml(rowItem.unit_price)}" placeholder="0.00" oninput="recalcNewCaseLineRow(this)"></td>
+    <td><input type="text" class="input-field mono num-col nc-line-contract-price" value="${escapeHtml(rowItem.contract_unit_price || '')}" placeholder="Schedule A rate"></td>
     <td><input type="text" class="input-field mono num-col nc-line-total" required value="${escapeHtml(rowItem.line_total)}"></td>
     <td>
       <button type="button" onclick="if(document.querySelectorAll('#nc-lines-tbody tr').length > 1) this.closest('tr').remove(); syncStatedTotalFromLines();" class="btn btn-secondary btn-sm">
@@ -1700,6 +1732,7 @@ function addNewCaseLineRow(item) {
     </td>
   `;
   tbody.appendChild(tr);
+  syncStatedTotalFromLines();
 }
 
 function recalcNewCaseLineRow(inputEl) {
@@ -1725,115 +1758,28 @@ function syncStatedTotalFromLines() {
   if (statedEl) statedEl.value = sum.toFixed(2);
 }
 
-function populateSampleOverchargeForm() {
-  const vendor = getSelectedNewCaseVendor();
-  const rates = vendor?.rates || [];
-  const r1 = rates[0] || { sku: 'CC-5', description: 'Corrugated carton, 5-ply (CC-5)', unit_price: '100.00' };
-  const r2 = rates[1] || r1;
-  const r1Price = Number(r1.unit_price || 100);
-  const overchargedPrice = (r1Price * 1.15).toFixed(2);
-  const r2Price = Number(r2.unit_price || 250).toFixed(2);
-
-  const randSuffix = String(Math.floor(10 + Math.random() * 89));
-  document.getElementById('nc-case-id').value = `OC-20261118-${randSuffix}`;
-  document.getElementById('nc-invoice-num').value = `INV-11${randSuffix}`;
-  document.getElementById('nc-invoice-date').value = '2026-11-18';
-  const tbody = document.getElementById('nc-lines-tbody');
-  if (tbody) tbody.innerHTML = '';
-
-  addNewCaseLineRow({
-    item_code: r1.sku || r1.item_code,
-    description: r1.description,
-    quantity: '200',
-    unit_price: overchargedPrice,
-    line_total: (200 * Number(overchargedPrice)).toFixed(2),
-  });
-  if (rates.length > 1) {
-    addNewCaseLineRow({
-      item_code: r2.sku || r2.item_code,
-      description: r2.description,
-      quantity: '40',
-      unit_price: r2Price,
-      line_total: (40 * Number(r2Price)).toFixed(2),
-    });
-  }
-  syncStatedTotalFromLines();
-}
-
-function populateSampleCleanForm() {
-  const vendor = getSelectedNewCaseVendor();
-  const rates = vendor?.rates || [];
-  const r1 = rates[0] || { sku: 'CC-5', description: 'Corrugated carton, 5-ply (CC-5)', unit_price: '100.00' };
-  const r1Price = Number(r1.unit_price || 100).toFixed(2);
-
-  const randSuffix = String(Math.floor(10 + Math.random() * 89));
-  document.getElementById('nc-case-id').value = `OC-20261119-${randSuffix}`;
-  document.getElementById('nc-invoice-num').value = `INV-10${randSuffix}`;
-  document.getElementById('nc-invoice-date').value = '2026-11-19';
+function resetNewCaseFormBlank() {
+  const cidEl = document.getElementById('nc-case-id');
+  if (cidEl) cidEl.value = computeNextCaseId();
+  const vIdEl = document.getElementById('nc-vendor-id');
+  if (vIdEl) vIdEl.value = (STATE.vendors || [])[0]?.vendor_id || '';
+  const vNameEl = document.getElementById('nc-vendor-name');
+  if (vNameEl) vNameEl.value = (STATE.vendors || [])[0]?.vendor_name || '';
+  const invEl = document.getElementById('nc-invoice-num');
+  if (invEl) invEl.value = '';
+  const dateEl = document.getElementById('nc-invoice-date');
+  if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
   const tbody = document.getElementById('nc-lines-tbody');
   if (tbody) tbody.innerHTML = '';
   addNewCaseLineRow({
-    item_code: r1.sku || r1.item_code,
-    description: r1.description,
-    quantity: '150',
-    unit_price: r1Price,
-    line_total: (150 * Number(r1Price)).toFixed(2),
+    item_code: '',
+    description: '',
+    quantity: '1',
+    unit_price: '',
+    contract_unit_price: '',
+    line_total: '0.00',
   });
-  syncStatedTotalFromLines();
-}
-
-function populateSampleReviewForm() {
-  const vendor = getSelectedNewCaseVendor();
-  const rates = vendor?.rates || [];
-  const r1 = rates[0] || { sku: 'CC-5', description: 'Corrugated carton, 5-ply (CC-5)', unit_price: '100.00' };
-  const r1Price = Number(r1.unit_price || 100).toFixed(2);
-
-  const randSuffix = String(Math.floor(10 + Math.random() * 89));
-  document.getElementById('nc-case-id').value = `OC-20261120-${randSuffix}`;
-  document.getElementById('nc-invoice-num').value = `INV-12${randSuffix}`;
-  document.getElementById('nc-invoice-date').value = '2026-11-20';
-  const tbody = document.getElementById('nc-lines-tbody');
-  if (tbody) tbody.innerHTML = '';
-  addNewCaseLineRow({
-    item_code: r1.sku || r1.item_code,
-    description: r1.description,
-    quantity: '100',
-    unit_price: r1Price,
-    line_total: (100 * Number(r1Price)).toFixed(2),
-  });
-  addNewCaseLineRow({
-    item_code: 'UNCONTRACTED-99',
-    description: 'Uncontracted Custom Die-Cut Insert (UNCONTRACTED-99)',
-    quantity: '25',
-    unit_price: '120.00',
-    line_total: '3000.00',
-  });
-  syncStatedTotalFromLines();
-}
-
-function populateSampleBlockedForm() {
-  const vendor = getSelectedNewCaseVendor();
-  const rates = vendor?.rates || [];
-  const r1 = rates[0] || { sku: 'CC-5', description: 'Corrugated carton, 5-ply (CC-5)', unit_price: '100.00' };
-  const r1Price = Number(r1.unit_price || 100).toFixed(2);
-
-  const randSuffix = String(Math.floor(10 + Math.random() * 89));
-  document.getElementById('nc-case-id').value = `OC-20261121-${randSuffix}`;
-  document.getElementById('nc-invoice-num').value = `INV-13${randSuffix}`;
-  document.getElementById('nc-invoice-date').value = '2026-11-21';
-  const tbody = document.getElementById('nc-lines-tbody');
-  if (tbody) tbody.innerHTML = '';
-  // Intentional arithmetic discrepancy: Qty 100 * Price r1Price != Stated Line Total
-  const wrongLineTotal = (100 * Number(r1Price) + 500).toFixed(2);
-  addNewCaseLineRow({
-    item_code: r1.sku || r1.item_code,
-    description: r1.description,
-    quantity: '100',
-    unit_price: r1Price,
-    line_total: wrongLineTotal,
-  });
-  const statedEl = document.getElementById('nc-stated-total');
-  if (statedEl) statedEl.value = wrongLineTotal;
+  renderNewCaseContractPreview();
 }
 
 async function submitNewCase(event) {
@@ -1842,16 +1788,17 @@ async function submitNewCase(event) {
   if (errEl) errEl.classList.add('hidden');
 
   const caseId = document.getElementById('nc-case-id')?.value.trim();
-  const vendorId = document.getElementById('nc-vendor-id')?.value.trim() || 'acme';
+  const vendorId = document.getElementById('nc-vendor-id')?.value.trim().toLowerCase();
+  const vendorName = document.getElementById('nc-vendor-name')?.value.trim();
   const invoiceNumber = document.getElementById('nc-invoice-num')?.value.trim();
   const invoiceDate = document.getElementById('nc-invoice-date')?.value.trim();
   const currency = document.getElementById('nc-currency')?.value.trim() || 'INR';
   const statedTotal = document.getElementById('nc-stated-total')?.value.trim();
   const autoReconcile = Boolean(document.getElementById('nc-auto-reconcile')?.checked);
 
-  if (!caseId || !invoiceNumber || !invoiceDate || !statedTotal) {
+  if (!caseId || !vendorId || !invoiceNumber || !invoiceDate || !statedTotal) {
     if (errEl) {
-      errEl.textContent = 'Validation Error: Case ID, Invoice Number, Invoice Date, and Stated Subtotal are required.';
+      errEl.textContent = 'Validation Error: Case ID, Vendor ID, Invoice Number, Invoice Date, and Stated Subtotal are required.';
       errEl.classList.remove('hidden');
     }
     return;
@@ -1873,6 +1820,7 @@ async function submitNewCase(event) {
     const desc = r.querySelector('.nc-line-desc')?.value.trim();
     const qty = r.querySelector('.nc-line-qty')?.value.trim();
     const price = r.querySelector('.nc-line-price')?.value.trim();
+    const contractPrice = r.querySelector('.nc-line-contract-price')?.value.trim();
     const total = r.querySelector('.nc-line-total')?.value.trim();
     if (!sku || !qty || !price || !total || Number(qty) <= 0 || Number(price) <= 0) {
       if (errEl) {
@@ -1881,7 +1829,7 @@ async function submitNewCase(event) {
       }
       return;
     }
-    lines.push({
+    const lineObj = {
       line_number: i + 1,
       item_code: sku,
       description: desc || sku,
@@ -1890,7 +1838,11 @@ async function submitNewCase(event) {
       unit_price: Number(price).toFixed(2),
       line_total: Number(total).toFixed(2),
       source_ref: `line-${i + 1}`,
-    });
+    };
+    if (contractPrice && !Number.isNaN(Number(contractPrice)) && Number(contractPrice) > 0) {
+      lineObj.contract_unit_price = Number(contractPrice).toFixed(2);
+    }
+    lines.push(lineObj);
   }
 
   const invoiceJson = {
@@ -1909,6 +1861,7 @@ async function submitNewCase(event) {
       body: {
         case_id: caseId,
         vendor_id: vendorId,
+        vendor_name: vendorName,
         invoice_json: invoiceJson,
         auto_reconcile: autoReconcile,
       },
@@ -1946,9 +1899,13 @@ async function loadEvidenceSection() {
 
     const caseSel = document.getElementById('ev-case-select');
     if (caseSel) {
-      caseSel.innerHTML = (cases || [])
-        .map((c) => `<option value="${escapeHtml(c.case_id)}">${escapeHtml(c.case_id)} (${escapeHtml(c.invoice_number)})</option>`)
-        .join('');
+      if ((cases || []).length === 0) {
+        caseSel.innerHTML = `<option value="">No persisted cases available</option>`;
+      } else {
+        caseSel.innerHTML = (cases || [])
+          .map((c) => `<option value="${escapeHtml(c.case_id)}">${escapeHtml(c.case_id)} (${escapeHtml(c.invoice_number)})</option>`)
+          .join('');
+      }
     }
 
     const container = document.getElementById('evidence-table-container');
@@ -1958,7 +1915,7 @@ async function loadEvidenceSection() {
         container.innerHTML = `
           <div class="empty-state m-4">
             <div class="font-semibold text-xs">No Registered Case Evidence Found</div>
-            <p class="text-xs mt-1" style="color: var(--text-secondary);">Create a case or reset the benchmark dataset to register cryptographic evidence.</p>
+            <p class="text-xs mt-1" style="color: var(--text-secondary);">Create an invoice intake case to automatically compute and register 64-character SHA-256 evidence records.</p>
           </div>
         `;
       } else {
@@ -2041,6 +1998,20 @@ async function loadVendorsSection() {
     updateNavBadge('nav-count-vendors', vendors.length);
     const container = document.getElementById('vendors-list-container');
     if (!container) return;
+
+    if (vendors.length === 0) {
+      const formPanel = document.getElementById('new-vendor-panel');
+      if (formPanel) formPanel.classList.remove('hidden');
+      container.innerHTML = `
+        <div class="panel p-6 text-center">
+          <div class="font-semibold text-xs">No Vendors Registered Yet</div>
+          <p class="text-xs mt-1" style="color: var(--text-secondary);">
+            Use the form above to register your first vendor profile, Schedule A rate, and verified treasury routing destination.
+          </p>
+        </div>
+      `;
+      return;
+    }
 
     container.innerHTML = vendors.map((v) => {
       const dest = v.treasury_destination || {};
@@ -2125,8 +2096,15 @@ async function submitNewVendor(event) {
       },
     });
     showToast(`Vendor '${vendor_name}' (${vendor_id}) registered with verified treasury routing.`);
-    toggleVendorForm();
+    document.getElementById('vn-id').value = '';
+    document.getElementById('vn-name').value = '';
+    document.getElementById('vn-contract-id').value = '';
+    document.getElementById('vn-dest-ref').value = '';
+    document.getElementById('vn-sku').value = '';
+    document.getElementById('vn-sku-desc').value = '';
+    document.getElementById('vn-sku-price').value = '';
     await loadVendorsSection();
+    await refreshAllData();
   } catch (err) {
     showToast(err.message, true);
   }
@@ -2142,15 +2120,31 @@ async function loadContractsSection() {
     STATE.contracts = contracts;
     updateNavBadge('nav-count-contracts', contracts.length);
 
-    const vSel = document.getElementById('cr-vendor');
-    if (vSel) {
-      vSel.innerHTML = contracts
+    const dl = document.getElementById('cr-vendor-datalist');
+    if (dl) {
+      dl.innerHTML = contracts
         .map((c) => `<option value="${escapeHtml(c.vendor_id)}">${escapeHtml(c.vendor_name)} (${escapeHtml(c.contract_id)})</option>`)
         .join('');
+    }
+    const vInput = document.getElementById('cr-vendor');
+    if (vInput && !vInput.value.trim() && contracts.length > 0) {
+      vInput.value = contracts[0].vendor_id;
     }
 
     const container = document.getElementById('contracts-list-container');
     if (!container) return;
+
+    if (contracts.length === 0) {
+      container.innerHTML = `
+        <div class="panel p-6 text-center">
+          <div class="font-semibold text-xs">No Contract Schedules Registered Yet</div>
+          <p class="text-xs mt-1" style="color: var(--text-secondary);">
+            Enter a Vendor ID, SKU, Description, and Unit Price above to create a Schedule A contract rate clause.
+          </p>
+        </div>
+      `;
+      return;
+    }
 
     container.innerHTML = contracts.map((c) => `
       <div class="panel">
@@ -2216,11 +2210,15 @@ async function loadContractsSection() {
 
 async function submitContractRate(event) {
   event.preventDefault();
-  const vendorId = document.getElementById('cr-vendor')?.value;
+  const vendorId = (document.getElementById('cr-vendor')?.value || '').trim().toLowerCase();
   const item_code = document.getElementById('cr-sku')?.value.trim();
   const description = document.getElementById('cr-desc')?.value.trim();
   const unit = document.getElementById('cr-unit')?.value.trim();
   const unit_price = document.getElementById('cr-price')?.value.trim();
+  if (!vendorId) {
+    showToast('Vendor ID is required to save a contract rate clause.', true);
+    return;
+  }
 
   try {
     const res = await apiRequest(`/api/v1/contracts/${encodeURIComponent(vendorId)}/rates`, {
@@ -2232,6 +2230,7 @@ async function submitContractRate(event) {
     document.getElementById('cr-desc').value = '';
     document.getElementById('cr-price').value = '';
     await loadContractsSection();
+    await refreshAllData();
   } catch (err) {
     showToast(err.message, true);
   }
@@ -2955,7 +2954,7 @@ async function loadSettingsSection() {
                 <td class="mono font-semibold">@${escapeHtml(u.username)}</td>
                 <td>${escapeHtml(u.full_name)}</td>
                 <td>${statusTagHtml(u.role)}</td>
-                <td><span class="status-tag">${u.is_demo ? 'DEMO SEED' : 'OPERATOR'}</span></td>
+                <td><span class="status-tag">SYSTEM ACCOUNT</span></td>
                 <td>${statusTagHtml(u.is_active ? 'ACTIVE' : 'DISABLED')}</td>
                 <td class="mono text-[11px]" style="color: var(--text-secondary);">${escapeHtml((u.permissions || []).join(', '))}</td>
                 <td>
@@ -3041,24 +3040,10 @@ async function submitNewUser(event) {
   }
 }
 
-async function resetDemoDataset() {
-  try {
-    showToast('Re-initializing 6 canonical benchmark cases and audit ledger chain...');
-    await apiRequest('/api/v1/demo/reset', { method: 'POST' });
-    showToast('6 canonical benchmark cases restored and verified.');
-    await refreshAllData();
-    if (STATE.activeSection !== 'overview') {
-      navigateSection(STATE.activeSection);
-    }
-  } catch (err) {
-    showToast(err.message, true);
-  }
-}
-
 async function clearAllDemoData() {
   try {
     await apiRequest('/api/v1/demo/clear', { method: 'POST' });
-    showToast('All demo cases cleared. Workspace is now in a clean empty state.');
+    showToast('Workspace purged and reset to clean base state.');
     await refreshAllData();
     navigateSection('overview');
   } catch (err) {

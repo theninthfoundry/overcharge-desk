@@ -159,11 +159,11 @@ def test_desk_intake_txt_invoice(tmp_path):
     assert inv_data["vendor_name_as_written"] == "Acme Supplies Pvt Ltd"
     assert len(inv_data["lines"]) == 2
     assert inv_data["lines"][0]["line_no"] == 1
-    assert inv_data["lines"][0]["quantity"] == 500
-    assert inv_data["lines"][0]["unit_price"] == 112.0
-    assert inv_data["lines"][0]["line_total"] == 56000.0
+    assert inv_data["lines"][0]["quantity"] == "500"
+    assert inv_data["lines"][0]["unit_price"] == "112.00"
+    assert inv_data["lines"][0]["line_total"] == "56000.00"
     assert "acme-inv-1103.txt, line 1" in inv_data["lines"][0]["source_ref"]
-    assert inv_data["stated_total"] == 66000.0
+    assert inv_data["stated_total"] == "66000.00"
 
 
 def test_simulate_switch_fast_execution():

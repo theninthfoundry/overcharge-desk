@@ -92,19 +92,37 @@ ROLE_PERMISSIONS: Dict[str, List[str]] = {
 }
 
 
-def load_signing_key(key_file: Path | str | None = None) -> bytes:
-    """Load HMAC signing key bytes from file, failing closed if missing or empty."""
-    target = Path(key_file) if key_file else get_default_key_path()
-    if not target.exists():
-        # Fallback check for legacy location
-        alt = Path(__file__).resolve().parent.parent / "config" / "signing.key"
-        if alt.exists():
-            target = alt
-        else:
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _assert_not_in_repo_config(target: Path) -> None:
+    """Enforce key isolation invariant: signing keys must never live under config/signing.key in the repo."""
+    try:
+        resolved = target.resolve()
+        forbidden = (REPO_ROOT / "config" / "signing.key").resolve()
+        if resolved == forbidden:
             raise ToolError(
-                f"Signing key file not found: {target}. Generate one or specify via --key-file / OVERCHARGE_KEY_DIR",
+                f"Security violation: Signing key inside repository config ({target}) is prohibited. "
+                "Store keys outside the repository via OVERCHARGE_KEY_DIR or ~/.overcharge/keys.",
                 4,
             )
+    except ToolError:
+        raise
+    except Exception:
+        pass
+
+
+def load_signing_key(key_file: Path | str | None = None) -> bytes:
+    """Load HMAC signing key bytes from file, failing closed if missing, short, or inside repo config."""
+    target = Path(key_file) if key_file else get_default_key_path()
+    _assert_not_in_repo_config(target)
+
+    if not target.exists():
+        raise ToolError(
+            f"Signing key file not found: {target}. Provision an isolated key outside the repository "
+            "via OVERCHARGE_KEY_DIR or --key-file.",
+            4,
+        )
 
     try:
         key_bytes = target.read_bytes().strip()
@@ -120,14 +138,41 @@ def load_signing_key(key_file: Path | str | None = None) -> bytes:
 
 
 def ensure_signing_key(key_file: Path | str | None = None) -> bytes:
-    """Ensure a signing key exists, generating a strong 32-byte key if absent."""
+    """Ensure a signing key exists, or atomically generate a 32-byte key with 0o600 permissions in non-production."""
     target = Path(key_file) if key_file else get_default_key_path()
+    _assert_not_in_repo_config(target)
+
     if target.exists():
         return load_signing_key(target)
 
+    app_env = os.getenv("APP_ENV", "development").lower()
+    if app_env == "production":
+        raise ToolError(
+            f"Refusing to auto-generate ephemeral signing key in production ({target} not found). "
+            "Provision the signing key explicitly before starting in production.",
+            4,
+        )
+
     target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(target.parent, 0o700)
+    except Exception:
+        pass
+
     generated = hashlib.sha256(os.urandom(64)).hexdigest().encode("utf-8")
-    target.write_bytes(generated)
+    try:
+        fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, generated)
+        finally:
+            os.close(fd)
+    except FileExistsError:
+        return load_signing_key(target)
+
+    try:
+        os.chmod(target, 0o600)
+    except Exception:
+        pass
     return generated
 
 

@@ -66,6 +66,13 @@ def approve_case_cli(
     """Execute human approval decision with TTY enforcement and Argon2id verification."""
     root = ROOT_DIR
 
+    app_env = os.getenv("APP_ENV", "development").lower()
+    if app_env == "production" and (force_tty or password_input is not None or os.getenv("OVERCHARGE_FORCE_TTY_TEST")):
+        raise ToolError(
+            "Security violation: TTY bypass flags and programmatic password injection are prohibited when APP_ENV=production",
+            4,
+        )
+
     # 1. Mandatory TTY check: Automated scripts or piped input cannot forge human authorization
     is_tty = sys.stdin.isatty() or force_tty or bool(os.getenv("OVERCHARGE_FORCE_TTY_TEST"))
     if not is_tty:
@@ -87,10 +94,16 @@ def approve_case_cli(
         raise ToolError("Authentication refused: Empty password", 4)
 
     # 3. Authenticate against Argon2id identity store
-    id_service = IdentityService(app_env=os.getenv("APP_ENV", "development"))
+    id_service = IdentityService(app_env=app_env)
     user = id_service.authenticate(username, pw)
     if not user:
         raise ToolError(f"Authentication failed: Invalid credentials for user '{username}'", 4)
+
+    if app_env == "production" and getattr(user, "is_demo", False):
+        raise ToolError(
+            f"Authorization refused: Demo identity '{username}' is prohibited in production",
+            4,
+        )
 
     # 4. Enforce role-based access control (RBAC)
     if user.role not in (SystemRole.APPROVER, SystemRole.ADMINISTRATOR):

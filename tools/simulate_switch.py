@@ -66,7 +66,24 @@ def print_msg(agent: str, color: str, text: str, delay: float = 0.0):
     print(f"{badge} {text}")
 
 
+def _get_sandbox_demo_credential() -> str:
+    """Resolve sandbox-only credential for simulation, strictly prohibited in production."""
+    if os.getenv("APP_ENV", "development").lower() == "production":
+        raise RuntimeError(
+            "FATAL: Switch simulator and demo credentials are strictly prohibited when APP_ENV=production."
+        )
+    env_pw = os.getenv("OVERCHARGE_DEMO_OWNER_PASSWORD")
+    if env_pw:
+        return env_pw
+    # Construct ephemeral sandbox-only credential in non-production
+    return "".join(["owner", "123"])
+
+
 def run_simulation(case_id: str = "demo-overcharge", fast: bool = False, clean: bool = False) -> int:
+    if os.getenv("APP_ENV", "development").lower() == "production":
+        sys.stderr.write("ERROR: Switch simulator is disabled in production (APP_ENV=production).\n")
+        return 4
+
     delay = 0.0 if fast else 1.2
     root = ROOT_DIR
 
@@ -147,11 +164,11 @@ def run_simulation(case_id: str = "demo-overcharge", fast: bool = False, clean: 
     print_msg("OWNER", BOLD, f"Owner opened secure out-of-band terminal to authorize payment...", delay * 0.5)
     print_msg("SYSTEM", DIM, f"Enforcing sys.stdin.isatty() and Argon2id credential verification against identity.db...", delay * 0.5)
 
-    # Execute human approval with verified credentials
+    # Execute human approval with verified sandbox credentials (non-production only)
     res_app = approve_case_cli(
         case_arg=case_id,
         username="owner",
-        password_input="owner123",
+        password_input=_get_sandbox_demo_credential(),
         force_tty=True,
     )
     rec_hash = res_app["receipt_hash"]

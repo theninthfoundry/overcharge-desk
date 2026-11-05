@@ -48,7 +48,7 @@ from validate_comparison import generate_verification_artifact, validate_compari
 from payment_sheet import COLUMNS as PAYMENT_COLUMNS, build_rows as build_payment_rows
 from partial_review import COLUMNS as PARTIAL_COLUMNS, build_partial_review_rows
 from blocked_review_report import COLUMNS as BLOCKED_COLUMNS, build_blocked_rows
-from evidence import load_registry, register_evidence, save_registry
+from evidence import get_evidence_digest_map, load_registry, register_evidence, save_registry, verify_evidence
 from audit_ledger import DEFAULT_LEDGER_DB, record_event
 from approval_receipt import load_signing_key, verify_approval_receipt
 from state_model import CommercialStatus, VerificationStatus, validate_state_consistency
@@ -422,13 +422,33 @@ def run_pipeline(
                 break
 
     if resolved_approval_path and Path(resolved_approval_path).exists():
+        ev_check = verify_evidence(out_p, base_dir=base)
+        if not ev_check["ok"]:
+            raise ToolError(
+                f"PAYMENT_RECOMMENDATION_REFUSED: Evidence registry verification failed: {ev_check['failures']}",
+                4,
+            )
+        current_pre_approval_digests = get_evidence_digest_map(
+            out_p,
+            active_only=True,
+            pre_approval_only=True,
+        )
         receipt_data = load_json(resolved_approval_path)
         key_bytes = load_signing_key(signing_key_file)
+        comp_totals = comp_result.get("totals", {})
         app_valid, app_issues = verify_approval_receipt(
             receipt_data,
             key_bytes,
             expected_case_id=case_id,
+            expected_verification_id=vrf_record.get("verification_id"),
             expected_compare_sha=digest,
+            expected_invoice_sha=src_sha,
+            expected_contract_id=comp_result.get("contract_id"),
+            expected_contract_sha=vrf_record.get("contract_digest"),
+            expected_audit_sha=vrf_record.get("verifier_integrity_digest"),
+            expected_approved_amount=comp_totals.get("matched_per_contract"),
+            expected_withheld_amount=comp_totals.get("variance_on_matched_lines"),
+            expected_evidence_digest_set=current_pre_approval_digests,
         )
         if not app_valid:
             raise ToolError(

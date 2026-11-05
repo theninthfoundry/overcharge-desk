@@ -394,6 +394,21 @@ def generate_verification_artifact(
     compact_ts = timestamp.replace("-", "").replace(":", "").replace("Z", "")
     verification_id = f"VRF-{case_id}-{compact_ts}"
 
+    if out_path and Path(out_path).exists():
+        try:
+            existing_vrf = load_json(out_path)
+            if (
+                existing_vrf.get("case_id") == case_id
+                and existing_vrf.get("comparison_digest") == comparison_digest
+                and existing_vrf.get("invoice_digest") == invoice_digest
+                and existing_vrf.get("contract_digest") == contract_digest
+                and existing_vrf.get("verification_status") == v_status
+            ):
+                timestamp = existing_vrf.get("timestamp", timestamp)
+                verification_id = existing_vrf.get("verification_id", verification_id)
+        except Exception:
+            pass
+
     verification_record: Dict[str, Any] = {
         "verification_version": VERIFIER_VERSION,
         "verification_id": verification_id,

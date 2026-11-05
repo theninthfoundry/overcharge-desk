@@ -26,8 +26,11 @@ from common import (CASE_ID_RE, ToolError, canonical_json_bytes, emit,
                     is_safe_relative_path, load_json, run_cli, sha256_file,
                     utc_now_iso, write_json_atomic)
 
-REGISTRY_VERSION = "1.0.0"
+import hmac
+
+REGISTRY_VERSION = "2.0.0"
 REGISTRY_FILENAME = "evidence_registry.json"
+GENESIS_REGISTRY_DIGEST = "0" * 64
 
 EVIDENCE_TYPES = (
     "source_invoice",
@@ -43,9 +46,66 @@ EVIDENCE_TYPES = (
     "audit_export",
 )
 
+IMMUTABLE_EVIDENCE_TYPES = (
+    "source_invoice",
+    "vendor_contract",
+    "extracted_invoice",
+    "approval_receipt",
+)
+
+POST_APPROVAL_EVIDENCE_TYPES = (
+    "approval_receipt",
+    "payment_artifact",
+    "ledger_snapshot",
+    "audit_export",
+)
+
 
 def _get_registry_path(case_dir: Path | str) -> Path:
     return Path(case_dir) / REGISTRY_FILENAME
+
+
+def _canonical_evidence_entry(item: dict) -> dict:
+    """Extract immutable fields of an evidence record for deterministic registry hashing."""
+    return {
+        "evidence_id": item.get("evidence_id"),
+        "case_id": item.get("case_id"),
+        "evidence_type": item.get("evidence_type"),
+        "original_filename": item.get("original_filename"),
+        "stored_path": item.get("stored_path"),
+        "content_hash": item.get("content_hash"),
+        "hash_algorithm": item.get("hash_algorithm", "SHA-256"),
+        "byte_size": item.get("byte_size"),
+        "version": item.get("version", 1),
+        "supersedes_evidence_id": item.get("supersedes_evidence_id"),
+        "previous_content_hash": item.get("previous_content_hash"),
+    }
+
+
+def compute_registry_digest(registry: dict) -> str:
+    """Compute canonical 64-character SHA-256 digest of the evidence registry state."""
+    payload = {
+        "registry_version": registry.get("registry_version", REGISTRY_VERSION),
+        "case_id": registry.get("case_id"),
+        "registry_sequence": int(registry.get("registry_sequence", 1)),
+        "previous_registry_digest": registry.get("previous_registry_digest", GENESIS_REGISTRY_DIGEST),
+        "evidence": [_canonical_evidence_entry(e) for e in registry.get("evidence", [])],
+    }
+    return hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
+
+
+def _try_get_signing_key() -> Optional[bytes]:
+    """Attempt to load the active HMAC signing key without failing if unconfigured in unit tests."""
+    try:
+        from auth import load_signing_key
+        return load_signing_key()
+    except Exception:
+        return None
+
+
+def compute_registry_signature(registry_digest: str, key_bytes: bytes) -> str:
+    """Compute HMAC-SHA256 signature over the registry digest."""
+    return hmac.new(key_bytes, registry_digest.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def load_registry(case_dir: Path | str) -> dict:
@@ -55,6 +115,10 @@ def load_registry(case_dir: Path | str) -> dict:
         return {
             "registry_version": REGISTRY_VERSION,
             "case_id": None,
+            "registry_sequence": 0,
+            "previous_registry_digest": GENESIS_REGISTRY_DIGEST,
+            "registry_digest": None,
+            "registry_signature": None,
             "created_at": utc_now_iso(),
             "evidence": [],
         }
@@ -64,9 +128,25 @@ def load_registry(case_dir: Path | str) -> dict:
     return data
 
 
-def save_registry(case_dir: Path | str, registry: dict) -> None:
-    """Save case evidence registry atomically."""
+def save_registry(case_dir: Path | str, registry: dict, bump_sequence: bool = True) -> None:
+    """Save case evidence registry atomically with cryptographic hash-chain and HMAC authentication."""
     reg_path = _get_registry_path(case_dir)
+    if bump_sequence:
+        prev_digest = registry.get("registry_digest") or GENESIS_REGISTRY_DIGEST
+        seq = int(registry.get("registry_sequence") or 0) + 1
+        registry["registry_version"] = REGISTRY_VERSION
+        registry["registry_sequence"] = seq
+        registry["previous_registry_digest"] = prev_digest
+    elif not registry.get("registry_sequence"):
+        registry["registry_version"] = REGISTRY_VERSION
+        registry["registry_sequence"] = 1
+        registry["previous_registry_digest"] = GENESIS_REGISTRY_DIGEST
+
+    digest = compute_registry_digest(registry)
+    registry["registry_digest"] = digest
+    key_bytes = _try_get_signing_key()
+    if key_bytes:
+        registry["registry_signature"] = compute_registry_signature(digest, key_bytes)
     registry["updated_at"] = utc_now_iso()
     write_json_atomic(reg_path, registry)
 
@@ -79,11 +159,18 @@ def register_evidence(
     case_id: Optional[str] = None,
     base_dir: Optional[Path | str] = None,
     description: Optional[str] = None,
+    allow_amendment: bool = False,
 ) -> dict:
-    """Register an artifact in the case evidence registry.
+    """Register an artifact in the case evidence registry (append-only).
 
-    Computes full 64-char SHA-256 content hash, records byte size,
-    timestamps, and saves registry atomically.
+    - Never overwrites an existing evidence record's content_hash in place.
+    - If the exact same artifact with the same content_hash is already registered,
+      returns the existing record idempotently.
+    - If an immutable source/input artifact (source_invoice, vendor_contract,
+      extracted_invoice, approval_receipt) is re-registered with a different
+      content_hash without allow_amendment=True, fails closed (exit code 4).
+    - When a derived artifact is recomputed or allow_amendment=True, appends a new
+      versioned evidence entry linking to the superseded record.
     """
     if evidence_type not in EVIDENCE_TYPES:
         raise ToolError(
@@ -112,7 +199,8 @@ def register_evidence(
             raise ToolError(f"Invalid case_id format: {case_id!r}")
         if registry.get("case_id") and registry["case_id"] != case_id:
             raise ToolError(
-                f"Registry case_id mismatch: existing {registry['case_id']!r} vs given {case_id!r}"
+                f"Registry case_id mismatch: existing {registry['case_id']!r} vs given {case_id!r}",
+                4,
             )
         registry["case_id"] = case_id
     else:
@@ -128,9 +216,11 @@ def register_evidence(
         except ValueError:
             stored_path = str(resolved_path).replace("\\", "/")
 
-    # Check if this exact artifact is already registered; update if so to maintain 1:1 parity with current disk state
+    # Locate active (non-superseded) matching evidence record
     existing_record = None
-    for item in registry.get("evidence", []):
+    for item in reversed(registry.get("evidence", [])):
+        if item.get("superseded_by"):
+            continue
         if item.get("stored_path") == stored_path or (
             item.get("evidence_type") == evidence_type and item.get("original_filename") == resolved_path.name
         ):
@@ -138,19 +228,34 @@ def register_evidence(
             break
 
     if existing_record:
-        existing_record["content_hash"] = content_hash
-        existing_record["byte_size"] = byte_size
-        existing_record["received_at"] = utc_now_iso()
-        existing_record["validation_status"] = "VERIFIED"
-        if description:
-            existing_record["description"] = description
-        save_registry(c_dir, registry)
-        return existing_record
+        # Idempotent re-registration when content_hash is identical
+        if str(existing_record.get("content_hash", "")).lower() == content_hash.lower():
+            return existing_record
+
+        # Different content hash on an already-registered artifact!
+        if evidence_type in IMMUTABLE_EVIDENCE_TYPES and not allow_amendment:
+            raise ToolError(
+                f"Evidence mutation refused (EVIDENCE_MUTATION_REFUSED): {evidence_type} "
+                f"({resolved_path.name}) is already registered as {existing_record.get('evidence_id')} "
+                f"with SHA-256 {existing_record.get('content_hash')}, which differs from new "
+                f"SHA-256 {content_hash}. Create a new case or invoke explicit amendment workflow.",
+                4,
+            )
 
     # Compute sequential evidence_id: EV-{case_id}-{seq:03d}
     existing_evidence = registry.get("evidence", [])
     seq = len(existing_evidence) + 1
     evidence_id = f"EV-{case_id}-{seq:03d}"
+
+    version = 1
+    supersedes_id = None
+    prev_content_hash = None
+    if existing_record:
+        version = int(existing_record.get("version", 1)) + 1
+        supersedes_id = existing_record.get("evidence_id")
+        prev_content_hash = existing_record.get("content_hash")
+        existing_record["superseded_by"] = evidence_id
+        existing_record["superseded_at"] = utc_now_iso()
 
     record = {
         "evidence_id": evidence_id,
@@ -161,44 +266,65 @@ def register_evidence(
         "content_hash": content_hash,
         "hash_algorithm": "SHA-256",
         "byte_size": byte_size,
+        "version": version,
+        "supersedes_evidence_id": supersedes_id,
+        "previous_content_hash": prev_content_hash,
         "received_at": utc_now_iso(),
         "validation_status": "VERIFIED",
-        "description": description or f"Registered {evidence_type} artifact",
+        "description": description or f"Registered {evidence_type} artifact (v{version})",
     }
 
     registry["evidence"].append(record)
-    save_registry(c_dir, registry)
+    save_registry(c_dir, registry, bump_sequence=True)
     return record
 
 
 def verify_evidence(
-    # Integrity Verification: Re-hashes on-disk evidence files to detect unauthorized modification
+    # Integrity Verification: Re-hashes on-disk evidence files AND verifies registry cryptographic authenticity
     case_dir: Path | str,
     evidence_id: Optional[str] = None,
     base_dir: Optional[Path | str] = None,
 ) -> dict:
-    """Re-verify content hashes of registered evidence files against current disk contents.
-
-    Returns summary of verified and failed items.
-    """
+    """Re-verify content hashes of registered evidence files and registry cryptographic digest/HMAC."""
     c_dir = Path(case_dir)
     registry = load_registry(c_dir)
     evidence_list = registry.get("evidence", [])
     if not evidence_list:
         raise ToolError(f"No evidence registered in {case_dir}")
 
+    results = []
+    failures = []
+
+    # 1. Verify registry cryptographic digest & optional HMAC signature
+    declared_reg_digest = registry.get("registry_digest")
+    if declared_reg_digest:
+        calc_reg_digest = compute_registry_digest(registry)
+        if calc_reg_digest.lower() != str(declared_reg_digest).lower():
+            failures.append({
+                "evidence_id": "REGISTRY",
+                "error": f"Registry digest mismatch: calculated {calc_reg_digest} != declared {declared_reg_digest}",
+            })
+        else:
+            declared_sig = registry.get("registry_signature")
+            key_bytes = _try_get_signing_key()
+            if declared_sig and key_bytes:
+                expected_sig = compute_registry_signature(calc_reg_digest, key_bytes)
+                if not hmac.compare_digest(expected_sig.lower(), str(declared_sig).lower()):
+                    failures.append({
+                        "evidence_id": "REGISTRY_HMAC",
+                        "error": "Registry HMAC signature verification failed (tampered registry metadata)",
+                    })
+
     base = Path(base_dir) if base_dir else Path.cwd()
+    active_evidence = [e for e in evidence_list if not e.get("superseded_by")]
     targets = (
         [e for e in evidence_list if e.get("evidence_id") == evidence_id]
         if evidence_id
-        else evidence_list
+        else active_evidence
     )
 
     if evidence_id and not targets:
         raise ToolError(f"Evidence ID {evidence_id!r} not found in registry")
-
-    results = []
-    failures = []
 
     for item in targets:
         eid = item.get("evidence_id")
@@ -259,11 +385,15 @@ def verify_evidence(
                 "hash": current_hash,
             })
 
-    save_registry(c_dir, registry)
+    # Only save validation_status updates without bumping the sequence if the registry itself wasn't tampered
+    if not any(f["evidence_id"] in ("REGISTRY", "REGISTRY_HMAC") for f in failures):
+        save_registry(c_dir, registry, bump_sequence=False)
 
     return {
         "ok": len(failures) == 0,
         "case_id": registry.get("case_id"),
+        "registry_digest": registry.get("registry_digest"),
+        "registry_sequence": registry.get("registry_sequence", 1),
         "total_checked": len(targets),
         "verified_count": len([r for r in results if r["valid"]]),
         "failed_count": len(failures),
@@ -272,30 +402,41 @@ def verify_evidence(
     }
 
 
-def list_evidence(case_dir: Path | str) -> list[dict]:
-    """Return all evidence records in a case registry."""
+def list_evidence(case_dir: Path | str, include_superseded: bool = True) -> list[dict]:
+    """Return evidence records in a case registry."""
     registry = load_registry(case_dir)
-    return registry.get("evidence", [])
+    items = registry.get("evidence", [])
+    if not include_superseded:
+        return [it for it in items if not it.get("superseded_by")]
+    return items
 
 
 def get_evidence(case_dir: Path | str, evidence_id: str) -> dict:
     """Retrieve a single evidence record by ID."""
-    items = list_evidence(case_dir)
+    items = list_evidence(case_dir, include_superseded=True)
     for it in items:
         if it.get("evidence_id") == evidence_id:
             return it
     raise ToolError(f"Evidence ID {evidence_id!r} not found", 2)
 
 
-def get_evidence_digest_map(case_dir: Path | str) -> dict[str, str]:
+def get_evidence_digest_map(
+    case_dir: Path | str,
+    active_only: bool = True,
+    pre_approval_only: bool = False,
+) -> dict[str, str]:
     # Cryptographic Digest Mapping: Extracts full 64-char SHA-256 mapping for approval bindings
-    """Return mapping of evidence_id -> content_hash for all registered items."""
-    items = list_evidence(case_dir)
-    return {
-        item["evidence_id"]: item["content_hash"]
-        for item in items
-        if "evidence_id" in item and "content_hash" in item
-    }
+    """Return mapping of evidence_id -> content_hash for registered items."""
+    items = list_evidence(case_dir, include_superseded=not active_only)
+    out: dict[str, str] = {}
+    for item in items:
+        if active_only and item.get("superseded_by"):
+            continue
+        if pre_approval_only and item.get("evidence_type") in POST_APPROVAL_EVIDENCE_TYPES:
+            continue
+        if "evidence_id" in item and "content_hash" in item:
+            out[item["evidence_id"]] = item["content_hash"]
+    return out
 
 
 def main() -> int:

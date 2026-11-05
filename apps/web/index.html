@@ -30,9 +30,6 @@
         <span style="color: var(--border-secondary);" class="hidden md:inline">/</span>
         <span id="header-breadcrumb" class="text-xs font-semibold mono hidden md:inline" style="color: var(--text-primary);">Overview</span>
       </div>
-      <span id="demo-env-badge" class="status-tag status-amber hidden" title="Benchmark demonstration records are currently loaded in the workspace.">
-        DEMO DATASET
-      </span>
     </div>
 
     <div class="flex items-center gap-2.5 shrink-0">
@@ -381,17 +378,11 @@
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <button type="button" onclick="populateSampleOverchargeForm()" class="btn btn-secondary btn-sm">
-              Pre-fill Overcharge Scenario
+            <button type="button" onclick="generateNewCaseIdInput()" class="btn btn-secondary btn-sm">
+              Generate Next Case ID
             </button>
-            <button type="button" onclick="populateSampleCleanForm()" class="btn btn-secondary btn-sm">
-              Pre-fill Clean Scenario
-            </button>
-            <button type="button" onclick="populateSampleReviewForm()" class="btn btn-secondary btn-sm">
-              Pre-fill Uncontracted SKU (Review)
-            </button>
-            <button type="button" onclick="populateSampleBlockedForm()" class="btn btn-secondary btn-sm">
-              Pre-fill Discrepancy (Blocked)
+            <button type="button" onclick="resetNewCaseFormBlank()" class="btn btn-secondary btn-sm">
+              Clear Form
             </button>
           </div>
         </div>
@@ -406,18 +397,23 @@
               </div>
             </div>
             <div class="panel-body space-y-5">
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div>
                   <label for="nc-case-id" class="field-label">Case Identifier *</label>
-                  <input type="text" id="nc-case-id" required placeholder="OC-20261115-01" class="input-field mono">
+                  <input type="text" id="nc-case-id" required placeholder="OC-20261105-01" class="input-field mono">
                 </div>
                 <div>
-                  <label for="nc-vendor-id" class="field-label">Vendor *</label>
-                  <select id="nc-vendor-id" required onchange="onNewCaseVendorChange()" class="select-field"></select>
+                  <label for="nc-vendor-id" class="field-label">Vendor ID (Slug) *</label>
+                  <input type="text" id="nc-vendor-id" list="nc-vendor-datalist" required oninput="onNewCaseVendorChange()" placeholder="e.g. apex-supply" class="input-field mono">
+                  <datalist id="nc-vendor-datalist"></datalist>
+                </div>
+                <div>
+                  <label for="nc-vendor-name" class="field-label">Vendor Legal Name</label>
+                  <input type="text" id="nc-vendor-name" placeholder="e.g. Apex Supply Co." class="input-field">
                 </div>
                 <div>
                   <label for="nc-invoice-num" class="field-label">Invoice Number *</label>
-                  <input type="text" id="nc-invoice-num" required placeholder="INV-2045" class="input-field mono">
+                  <input type="text" id="nc-invoice-num" required placeholder="INV-1001" class="input-field mono">
                 </div>
                 <div>
                   <label for="nc-invoice-date" class="field-label">Invoice Date *</label>
@@ -439,6 +435,7 @@
                         <th>Description</th>
                         <th class="num-col">Quantity</th>
                         <th class="num-col">Invoiced Unit Rate</th>
+                        <th class="num-col">Contract Rate (Schedule A)</th>
                         <th class="num-col">Stated Line Total</th>
                         <th></th>
                       </tr>
@@ -687,8 +684,9 @@
           </div>
           <form onsubmit="submitContractRate(event)" class="panel-body grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
             <div>
-              <label for="cr-vendor" class="field-label">Vendor *</label>
-              <select id="cr-vendor" required class="select-field mono"></select>
+              <label for="cr-vendor" class="field-label">Vendor ID (Slug) *</label>
+              <input type="text" id="cr-vendor" list="cr-vendor-datalist" required placeholder="e.g. apex-supply" class="input-field mono">
+              <datalist id="cr-vendor-datalist"></datalist>
             </div>
             <div>
               <label for="cr-sku" class="field-label">SKU / Item Code *</label>
@@ -1000,24 +998,21 @@
             </div>
           </div>
 
-          <!-- Demo Dataset Isolation & Controls -->
+          <!-- Workspace Storage & Factory Reset Control -->
           <div class="panel">
             <div class="panel-header">
               <div>
-                <h2 class="panel-title">Dataset &amp; Benchmark Environment Control</h2>
-                <p class="panel-subtitle">Manage seeded benchmark cases or clear workspace to inspect clean onboarding state</p>
+                <h2 class="panel-title">Workspace Storage &amp; Factory Reset Control</h2>
+                <p class="panel-subtitle">Purge all cases, vendors, contracts, payment instructions, and ledger events to return to the clean base state</p>
               </div>
             </div>
             <div class="panel-body space-y-3">
               <p class="text-xs" style="color: var(--text-secondary);">
-                Resetting the benchmark suite executes deterministic 13-stage reconciliation across all 6 canonical vendor scenarios. Clearing removes all demo cases so you can operate from a clean empty state.
+                Resets all workspace directories (<code>cases/</code>, <code>vendors/</code>, <code>contracts/</code>, <code>invoices/</code>, <code>checkpoints/</code>) and re-initializes empty SQLite WAL schemas (<code>ledger.db</code>, <code>payments.db</code>) while preserving RBAC identities.
               </p>
               <div class="flex flex-wrap gap-3 pt-1">
-                <button type="button" onclick="resetDemoDataset()" class="btn btn-primary">
-                  Reset 6 Canonical Benchmark Cases
-                </button>
                 <button type="button" onclick="clearAllDemoData()" class="btn btn-danger">
-                  Clear All Cases (Empty State)
+                  Purge All Workspace Records (Reset to Base State)
                 </button>
               </div>
             </div>
@@ -1172,10 +1167,10 @@
           </div>
         </form>
 
-        <!-- Evaluation Quick-Fill Credentials for Testing RBAC & Separation of Duties -->
+        <!-- System Role Accounts for Testing RBAC & Separation of Duties -->
         <div class="pt-3" style="border-top: 1px solid var(--border-primary);">
           <div class="text-[11px] font-semibold uppercase tracking-wider mb-2" style="color: var(--text-secondary);">
-            Seeded Evaluation Accounts (Click to Authenticate)
+            System Role Accounts (Click to Authenticate)
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="auth-quick-accounts">
             <button type="button" onclick="quickAuthenticate('owner', 'owner123')" class="btn btn-secondary btn-sm justify-between mono">

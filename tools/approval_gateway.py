@@ -109,7 +109,7 @@ def process_approval_decision(
             f"Authorization refused: Evidence integrity check failed on disk: {ev_verify['failures']}",
             2,
         )
-    evidence_digests = get_evidence_digest_map(c_dir)
+    evidence_digests = get_evidence_digest_map(c_dir, active_only=True, pre_approval_only=True)
 
     v_status = comp_data.get("verification_status")
     case_id = comp_data.get("case_id") or c_dir.name
@@ -167,13 +167,48 @@ def process_approval_decision(
         if not reason or not reason.strip():
             raise ToolError("Authorization refused: Rejection requires an explicit reason", 2)
 
-    # 6. Idempotency Check: Return existing valid receipt if identical request
+    # Read verification_id, contract_sha256, and audit_sha256 if present
+    verification_id = None
+    audit_sha256 = None
+    contract_sha256 = None
+    for cand in (c_dir / "audit" / "verification.json", c_dir / "verification.json"):
+        if cand.exists():
+            try:
+                vrf_d = load_json(cand)
+                verification_id = vrf_d.get("verification_id")
+                audit_sha256 = vrf_d.get("verifier_integrity_digest")
+                if vrf_d.get("contract_digest") and vrf_d.get("contract_digest") != "0" * 64:
+                    contract_sha256 = vrf_d.get("contract_digest")
+                break
+            except Exception:
+                pass
+
+    if not contract_sha256:
+        reg_d = load_registry(c_dir)
+        for item in reversed(reg_d.get("evidence", [])):
+            if not item.get("superseded_by") and item.get("evidence_type") == "vendor_contract":
+                contract_sha256 = item.get("content_hash")
+                break
+
+    # 6. Idempotency Check: Return existing valid receipt if identical request and evidence unchanged
     approvals_dir = c_dir / "approvals"
     receipt_path = approvals_dir / "approval_receipt.json"
     if receipt_path.exists():
         try:
             existing_receipt = load_json(receipt_path)
-            existing_valid, _ = verify_approval_receipt(existing_receipt, key_bytes, expected_case_id=case_id)
+            existing_valid, _ = verify_approval_receipt(
+                existing_receipt,
+                key_bytes,
+                expected_case_id=case_id,
+                expected_verification_id=verification_id,
+                expected_compare_sha=compare_sha,
+                expected_invoice_sha=inv_sha,
+                expected_contract_id=con_id,
+                expected_contract_sha=contract_sha256,
+                expected_approved_amount=approved_amount,
+                expected_withheld_amount=calc_withheld_str,
+                expected_evidence_digest_set=evidence_digests,
+            )
             if (
                 existing_valid
                 and existing_receipt.get("decision") == decision
@@ -197,16 +232,6 @@ def process_approval_decision(
                 }
         except Exception:
             pass
-
-    # Read verification_id if present
-    verification_id = None
-    for cand in (c_dir / "audit" / "verification.json", c_dir / "verification.json"):
-        if cand.exists():
-            try:
-                verification_id = load_json(cand).get("verification_id")
-                break
-            except Exception:
-                pass
 
     # Read ledger head if present
     ledger_head = None
@@ -238,6 +263,8 @@ def process_approval_decision(
         reason=reason,
         verification_id=verification_id,
         ledger_head_at_approval=ledger_head,
+        contract_sha256=contract_sha256,
+        audit_sha256=audit_sha256,
     )
 
     signed_receipt = sign_receipt(receipt_body, key_bytes)

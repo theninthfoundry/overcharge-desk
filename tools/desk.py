@@ -45,9 +45,11 @@ if str(SCRIPT_DIR) not in sys.path:
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from common import (CASE_ID_RE, STATE_BLOCKED, STATE_REVIEW_REQUIRED, STATE_VERIFIED,
-                    ToolError, canonical_json_bytes, emit, load_json, money_str,
-                    run_cli, sha256_file, to_decimal, utc_now_iso, write_json_atomic)
+from common import (CASE_ID_RE, CURRENCY_RE, STATE_BLOCKED, STATE_REVIEW_REQUIRED,
+                    STATE_VERIFIED, ToolError, canonical_json_bytes, emit,
+                    exact_str, load_json, money_str, num_str, parse_date,
+                    run_cli, sha256_file, to_decimal, utc_now_iso,
+                    write_json_atomic)
 from check_invoice import find_issues
 from compare import compare
 from evidence import get_evidence_digest_map, load_registry, register_evidence, verify_evidence
@@ -92,6 +94,37 @@ DEMO_CASE_MAP = {
     "demo-ledger-failure": "OC-20261001-01",
 }
 
+MAX_QUANTITY_DECIMALS = 4
+MAX_CURRENCY_DECIMALS = 2
+
+
+def _parse_strict_decimal(
+    raw_val: str,
+    field_name: str,
+    max_decimals: int,
+    allow_zero: bool = True,
+) -> Decimal:
+    """Parse a string into an exact Decimal with strict precision and finiteness bounds."""
+    if raw_val is None or not str(raw_val).strip():
+        raise ToolError(f"Missing numeric value for {field_name}", 2)
+    cleaned = str(raw_val).strip().replace(",", "")
+    # Reject scientific notation or non-standard tokens if needed, and delegate to to_decimal
+    d = to_decimal(cleaned, field_name)
+    if allow_zero:
+        if d < Decimal("0"):
+            raise ToolError(f"{field_name} cannot be negative: {raw_val!r}", 2)
+    else:
+        if d <= Decimal("0"):
+            raise ToolError(f"{field_name} must be strictly positive (> 0): {raw_val!r}", 2)
+
+    exp = d.as_tuple().exponent
+    if isinstance(exp, int) and exp < -max_decimals:
+        raise ToolError(
+            f"{field_name} exceeds maximum supported precision ({max_decimals} decimal places): {raw_val!r}",
+            2,
+        )
+    return d
+
 
 def parse_txt_invoice(
     text_content: str,
@@ -100,26 +133,77 @@ def parse_txt_invoice(
     case_id: str,
     vendor_id: Optional[str] = None,
 ) -> dict:
-    """Deterministically parse synthetic/plain text invoices into structured invoice dictionary."""
+    """Deterministically parse plain text invoices into structured invoice dictionary using exact Decimal arithmetic.
+
+    Never uses binary floating-point (float). Rejects missing identifiers, invalid ISO dates,
+    NaN/Infinity, negative values, and unsupported decimal precision.
+    """
     import re
     lines = [l.strip() for l in text_content.splitlines() if l.strip()]
     if not lines:
         raise ToolError(f"Invoice text file is empty: {source_filename}", 2)
 
-    vendor_raw = lines[0].strip()
-    vendor_name = vendor_raw.title() if vendor_raw.isupper() else vendor_raw
+    vendor_match = re.search(r"^\s*Vendor\s*:\s*(.+)$", text_content, re.MULTILINE | re.IGNORECASE)
+    if vendor_match:
+        vendor_name = vendor_match.group(1).strip()
+    else:
+        vendor_raw = lines[0].strip()
+        vendor_name = vendor_raw.title() if vendor_raw.isupper() else vendor_raw
 
-    inv_no_match = re.search(r"Invoice\s*No:?\s*([A-Za-z0-9\-]+)", text_content, re.IGNORECASE)
-    inv_number = inv_no_match.group(1).strip() if inv_no_match else "UNKNOWN-INV"
+    if not vendor_name:
+        raise ToolError(f"Missing vendor name in invoice text: {source_filename}", 2)
 
-    date_match = re.search(r"Invoice\s*Date:?\s*(\d{4}-\d{2}-\d{2})", text_content, re.IGNORECASE)
-    inv_date = date_match.group(1).strip() if date_match else "2026-01-01"
+    resolved_vendor_id = (vendor_id or "").strip()
+    if not resolved_vendor_id:
+        raise ToolError(
+            f"Missing vendor_id when parsing {source_filename}; refusing to default vendor identity",
+            2,
+        )
 
-    curr_match = re.search(r"Currency:?\s*([A-Za-z]{3})", text_content, re.IGNORECASE)
-    currency = curr_match.group(1).upper() if curr_match else "INR"
+    inv_no_match = re.search(
+        r"(?:Invoice\s*(?:No|Number|#)|INVOICE\s*#)\s*:?\s*([A-Za-z0-9\-]+)",
+        text_content,
+        re.IGNORECASE,
+    )
+    if not inv_no_match or not inv_no_match.group(1).strip():
+        raise ToolError(f"Missing Invoice No / Invoice Number in {source_filename}", 2)
+    inv_number = inv_no_match.group(1).strip()
 
-    tot_match = re.search(r"^\s*Total:\s*([0-9,.]+)", text_content, re.MULTILINE | re.IGNORECASE)
-    stated_total = float(tot_match.group(1).replace(",", "")) if tot_match else 0.0
+    date_match = re.search(
+        r"(?:Invoice\s*)?Date\s*:?\s*(\S+)",
+        text_content,
+        re.IGNORECASE,
+    )
+    if not date_match or not date_match.group(1).strip():
+        raise ToolError(f"Missing Invoice Date in {source_filename}", 2)
+    inv_date_raw = date_match.group(1).strip()
+    parse_date(inv_date_raw, "invoice_date")
+    inv_date = inv_date_raw
+
+    curr_match = re.search(r"Currency\s*:?\s*([A-Za-z]{3})\b", text_content, re.IGNORECASE)
+    if curr_match:
+        currency = curr_match.group(1).upper()
+    elif "INR" in text_content:
+        currency = "INR"
+    else:
+        raise ToolError(f"Missing 3-letter ISO currency in {source_filename}", 2)
+
+    if not CURRENCY_RE.match(currency):
+        raise ToolError(f"Invalid currency code in {source_filename}: {currency!r}", 2)
+
+    tot_match = re.search(
+        r"^\s*(?:Stated\s+Invoice\s+Total|Total)(?:\s*\([A-Z]{3}\))?\s*:\s*(\S+)",
+        text_content,
+        re.MULTILINE | re.IGNORECASE,
+    )
+    if not tot_match:
+        raise ToolError(f"Missing stated Total in {source_filename}", 2)
+    stated_total_d = _parse_strict_decimal(
+        tot_match.group(1),
+        "stated_total",
+        max_decimals=MAX_CURRENCY_DECIMALS,
+        allow_zero=True,
+    )
 
     line_items = []
     for line in lines:
@@ -128,30 +212,49 @@ def parse_txt_invoice(
             if len(parts) >= 6 and parts[0].isdigit():
                 line_no = int(parts[0])
                 desc = parts[1]
-                qty_raw = float(parts[2].replace(",", ""))
-                qty = int(qty_raw) if qty_raw.is_integer() else qty_raw
-                unit = parts[3]
-                unit_price = float(parts[4].replace(",", ""))
-                line_total = float(parts[5].replace(",", ""))
+                if not desc:
+                    raise ToolError(f"Line {line_no}: empty description in {source_filename}", 2)
+                qty_d = _parse_strict_decimal(
+                    parts[2],
+                    f"line {line_no} quantity",
+                    max_decimals=MAX_QUANTITY_DECIMALS,
+                    allow_zero=False,
+                )
+                unit = parts[3] or "unit"
+                unit_price_d = _parse_strict_decimal(
+                    parts[4],
+                    f"line {line_no} unit_price",
+                    max_decimals=MAX_CURRENCY_DECIMALS,
+                    allow_zero=True,
+                )
+                line_total_d = _parse_strict_decimal(
+                    parts[5],
+                    f"line {line_no} line_total",
+                    max_decimals=MAX_CURRENCY_DECIMALS,
+                    allow_zero=True,
+                )
                 line_items.append({
                     "line_no": line_no,
                     "description": desc,
-                    "quantity": qty,
+                    "quantity": num_str(qty_d),
                     "unit": unit,
-                    "unit_price": unit_price,
-                    "line_total": line_total,
+                    "unit_price": exact_str(unit_price_d),
+                    "line_total": money_str(line_total_d),
                     "source_ref": f"invoices/{source_filename}, line {line_no}",
                 })
 
+    if not line_items:
+        raise ToolError(f"No valid line items found in {source_filename}", 2)
+
     return {
         "case_id": case_id,
-        "vendor_id": vendor_id or "acme",
+        "vendor_id": resolved_vendor_id,
         "vendor_name_as_written": vendor_name,
         "invoice_number": inv_number,
         "invoice_date": inv_date,
         "currency": currency,
         "lines": line_items,
-        "stated_total": stated_total,
+        "stated_total": money_str(stated_total_d),
         "source_file": f"invoices/{source_filename}",
         "source_sha256": source_sha256,
         "extraction_issues": [],
@@ -169,7 +272,11 @@ def run_intake(
     cases_dir: Path | str = "cases",
     base_dir: Path | str = ".",
 ) -> dict:
-    """Intake raw invoice and contract evidence into a new or existing case folder."""
+    """Intake raw invoice and contract evidence into a new or existing case folder.
+
+    Enforces append-only evidence provenance: refuses to overwrite an existing case
+    if the incoming invoice or contract SHA-256 differs from registered evidence.
+    """
     root = Path(base_dir).resolve()
     inv_p = Path(invoice_path)
     if not inv_p.is_absolute():
@@ -197,7 +304,13 @@ def run_intake(
             vendor_data = load_json(con_p)
         except Exception:
             pass
-    vendor_id = vendor_data.get("vendor_id", "acme")
+    vendor_id = vendor_data.get("vendor_id")
+    if not vendor_id:
+        stem = con_p.stem.lower()
+        if stem.endswith("-contract"):
+            vendor_id = stem[: -len("-contract")]
+        else:
+            vendor_id = stem
 
     # Determine canonical case_id and case_dir
     dir_name = case_id
@@ -236,6 +349,51 @@ def run_intake(
             dir_name = canonical_id
 
     case_dir = c_base / dir_name
+
+    # P0.1 Guard: Refuse re-intake into an existing case if source_invoice or vendor_contract hash differs
+    if case_dir.exists():
+        reg_file = case_dir / "evidence_registry.json"
+        if reg_file.exists():
+            existing_reg = load_registry(case_dir)
+            for item in existing_reg.get("evidence", []):
+                if item.get("superseded_by"):
+                    continue
+                etype = item.get("evidence_type")
+                ehash = str(item.get("content_hash", "")).lower()
+                if etype == "source_invoice" and ehash and ehash != inv_sha.lower():
+                    raise ToolError(
+                        f"Re-intake refused (EVIDENCE_MUTATION_REFUSED): Case '{canonical_id}' already has "
+                        f"registered source_invoice ({item.get('original_filename')}) with SHA-256 {ehash} "
+                        f"!= incoming SHA-256 {inv_sha}. Create a new case for modified documents.",
+                        4,
+                    )
+                if etype == "vendor_contract" and ehash and ehash != con_sha.lower():
+                    raise ToolError(
+                        f"Re-intake refused (EVIDENCE_MUTATION_REFUSED): Case '{canonical_id}' already has "
+                        f"registered vendor_contract ({item.get('original_filename')}) with SHA-256 {ehash} "
+                        f"!= incoming SHA-256 {con_sha}. Create a new case for modified contracts.",
+                        4,
+                    )
+        existing_inv_json = case_dir / "invoice.json"
+        if existing_inv_json.exists() and inv_p.resolve() != existing_inv_json.resolve():
+            try:
+                old_inv = load_json(existing_inv_json)
+                old_src_sha = str(old_inv.get("source_sha256", "")).lower()
+                if old_src_sha and len(old_src_sha) == 64 and old_src_sha != inv_sha.lower():
+                    # If the input is a raw source file whose SHA differs from the case's declared source_sha256
+                    if inv_p.suffix.lower() != ".json" or (
+                        str(inv_data.get("source_sha256", "")).lower() != old_src_sha
+                    ):
+                        raise ToolError(
+                            f"Re-intake refused (EVIDENCE_MUTATION_REFUSED): Case '{canonical_id}' is bound "
+                            f"to source_sha256 {old_src_sha}, which differs from incoming file.",
+                            4,
+                        )
+            except ToolError:
+                raise
+            except Exception:
+                pass
+
     case_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy files into case directory if not already there
@@ -680,15 +838,40 @@ def run_finalize(
             4,
         )
 
-    # 2. Cryptographic verification of approval receipt
+    # 2. Verify on-disk evidence registry before finalization (fail-closed if any artifact was tampered)
+    if (case_dir / "evidence_registry.json").exists():
+        ev_verify = verify_evidence(case_dir, base_dir=root)
+        if not ev_verify["ok"]:
+            raise ToolError(
+                f"Finalization refused: Evidence integrity verification failed: {ev_verify['failures']}",
+                4,
+            )
+        current_pre_approval_digests = get_evidence_digest_map(
+            case_dir,
+            active_only=True,
+            pre_approval_only=True,
+        )
+    else:
+        current_pre_approval_digests = None
+
+    # 3. Cryptographic verification of approval receipt against current case & evidence state
     receipt_data = load_json(receipt_p)
     key_path = Path(signing_key_file) if signing_key_file else get_default_key_path()
     key_bytes = ensure_signing_key(key_path)
+
+    expected_inv_sha = inv_data.get("source_sha256")
+    expected_cmp_sha = None
+    comp_sha_file = case_dir / "compare.json.sha256"
+    if comp_sha_file.exists():
+        expected_cmp_sha = comp_sha_file.read_text(encoding="utf-8").strip()
 
     app_valid, app_issues = verify_approval_receipt(
         receipt_data,
         key_bytes,
         expected_case_id=case_id,
+        expected_compare_sha=expected_cmp_sha,
+        expected_invoice_sha=expected_inv_sha,
+        expected_evidence_digest_set=current_pre_approval_digests,
     )
     if not app_valid:
         raise ToolError(
@@ -703,7 +886,7 @@ def run_finalize(
             4,
         )
 
-    # 3. Execute deterministic pipeline pass 2 with verified approval receipt
+    # 4. Execute deterministic pipeline pass 2 with verified approval receipt
     db_path = Path(ledger_db) if ledger_db else root / "ledger.db"
     res2 = run_pipeline(
         invoice_path=inv_file,

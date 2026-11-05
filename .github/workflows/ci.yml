@@ -35,11 +35,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Verify financial & cryptographic security invariants
+        run: |
+          python -c "
+          import pathlib, sys
+          fin_files = [
+              'tools/desk.py', 'tools/compare.py', 'tools/check_invoice.py',
+              'tools/validate_comparison.py', 'tools/payment_sheet.py',
+              'tools/partial_review.py', 'tools/blocked_review_report.py'
+          ]
+          for f in fin_files:
+              txt = pathlib.Path(f).read_text(encoding='utf-8')
+              if 'float(' in txt:
+                  sys.exit(f'FATAL: float() banned in financial module {f}')
+          "
+
       - name: Run test suite
         run: |
           python -m pytest -v --tb=short
 
-      - name: Validate sample demo files
+      - name: Validate sample fixture files
         run: |
           python tools/check_invoice.py tests/fixtures/example_invoice.json --strict
           python tools/compare.py tests/fixtures/example_invoice.json seed/acme.json

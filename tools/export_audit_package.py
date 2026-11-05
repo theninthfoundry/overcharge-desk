@@ -24,11 +24,22 @@ from typing import Any, Dict, List, Optional
 
 from common import (ToolError, canonical_json_bytes, emit, load_json, run_cli,
                     sha256_file, utc_now_iso, write_json_atomic)
+import hmac
 from auth import load_signing_key
 from approval_receipt import verify_approval_receipt
-from audit_ledger import DEFAULT_LEDGER_DB, list_events
+from audit_ledger import DEFAULT_LEDGER_DB, create_checkpoint, list_events, verify_ledger
+from evidence import verify_evidence
 
-EXPORT_VERSION = "1.0.0"
+EXPORT_VERSION = "1.1.0"
+
+
+def _resolve_optional_key(key_file: Optional[Path | str] = None) -> Optional[bytes]:
+    if key_file:
+        return load_signing_key(key_file)
+    try:
+        return load_signing_key()
+    except Exception:
+        return None
 
 
 def export_case_audit(
@@ -37,7 +48,7 @@ def export_case_audit(
     ledger_db: Path | str = DEFAULT_LEDGER_DB,
     key_file: Optional[Path | str] = None,
 ) -> dict:
-    """Export complete evidence package for an audit case."""
+    """Export complete evidence package for an audit case with signed ledger checkpoint."""
     c_p = Path(case_dir)
     if not c_p.exists():
         raise ToolError(f"Case directory does not exist: {c_p}", 2)
@@ -52,6 +63,8 @@ def export_case_audit(
 
     target_dir = Path(out_dir) if out_dir else Path("case_audit") / case_id
     target_dir.mkdir(parents=True, exist_ok=True)
+
+    key_bytes = _resolve_optional_key(key_file)
 
     copied_artifacts: Dict[str, str] = {}
     artifact_hashes: Dict[str, str] = {}
@@ -68,16 +81,29 @@ def export_case_audit(
             copied_artifacts[rel_str] = str(dest)
             artifact_hashes[rel_str] = h
 
-    # Export relevant ledger events
+    # Export relevant ledger events and signed checkpoint
     ledger_events = []
+    ledger_checkpoint = None
     db_p = Path(ledger_db)
     if db_p.exists():
+        valid_chain, chain_issues = verify_ledger(db_p)
+        if not valid_chain:
+            raise ToolError(f"Cannot export audit package from compromised ledger: {'; '.join(chain_issues)}", 2)
         ledger_events = list_events(case_id=case_id, db_path=db_p)
         ledger_exp_p = target_dir / "audit" / "ledger_events.json"
         ledger_exp_p.parent.mkdir(parents=True, exist_ok=True)
         write_json_atomic(ledger_exp_p, {"case_id": case_id, "events": ledger_events})
-        rel_str = "audit/ledger_events.json"
-        artifact_hashes[rel_str] = sha256_file(ledger_exp_p)
+        artifact_hashes["audit/ledger_events.json"] = sha256_file(ledger_exp_p)
+
+        all_events = list_events(db_path=db_p)
+        if all_events:
+            chk_path = target_dir / "audit" / "ledger_checkpoint.json"
+            ledger_checkpoint = create_checkpoint(
+                db_path=db_p,
+                key_bytes=key_bytes,
+                checkpoint_out_path=chk_path,
+            )
+            artifact_hashes["audit/ledger_checkpoint.json"] = sha256_file(chk_path)
 
     # Verification inspection
     vrf_p = target_dir / "audit" / "verification.json"
@@ -93,11 +119,10 @@ def export_case_audit(
     app_valid = None
     app_issues = []
 
-    if app_data and key_file:
-        key_bytes = load_signing_key(key_file)
+    if app_data and key_bytes:
         app_valid, app_issues = verify_approval_receipt(app_data, key_bytes, expected_case_id=case_id)
 
-    report = {
+    report: Dict[str, Any] = {
         "export_version": EXPORT_VERSION,
         "exported_at": utc_now_iso(),
         "case_id": case_id,
@@ -110,14 +135,18 @@ def export_case_audit(
         "approval_signature_verified": app_valid,
         "approval_verification_issues": app_issues,
         "ledger_events_count": len(ledger_events),
+        "ledger_checkpoint_id": ledger_checkpoint.get("checkpoint_id") if ledger_checkpoint else None,
+        "ledger_head_hash": ledger_checkpoint.get("head_event_hash") if ledger_checkpoint else None,
         "total_packaged_files": len(artifact_hashes),
         "artifact_hashes": artifact_hashes,
     }
 
-    # Compute Package Integrity Digest
-    report_copy = {k: v for k, v in report.items() if k != "package_integrity_digest"}
+    # Compute Package Integrity Digest and optional HMAC Signature
+    report_copy = {k: v for k, v in report.items() if k not in ("package_integrity_digest", "package_signature")}
     pkg_digest = hashlib.sha256(canonical_json_bytes(report_copy)).hexdigest()
     report["package_integrity_digest"] = pkg_digest
+    if key_bytes:
+        report["package_signature"] = hmac.new(key_bytes, pkg_digest.encode("utf-8"), hashlib.sha256).hexdigest()
 
     report_path = target_dir / "audit_integrity_report.json"
     write_json_atomic(report_path, report)
@@ -128,7 +157,7 @@ def export_case_audit(
 
 
 def verify_package_integrity(package_dir: Path | str, key_file: Optional[Path | str] = None) -> tuple[bool, list[str]]:
-    """Strictly verify all hashes and cryptographic bindings of an audit package."""
+    """Strictly verify all hashes, checkpoints, and cryptographic bindings of an audit package."""
     p_dir = Path(package_dir)
     report_path = p_dir / "audit_integrity_report.json"
     if not report_path.exists():
@@ -136,13 +165,18 @@ def verify_package_integrity(package_dir: Path | str, key_file: Optional[Path | 
 
     report = load_json(report_path)
     issues = []
+    key_bytes = _resolve_optional_key(key_file)
 
-    # 1. Verify Package Integrity Digest
+    # 1. Verify Package Integrity Digest & HMAC Signature
     declared_digest = report.get("package_integrity_digest")
-    report_copy = {k: v for k, v in report.items() if k != "package_integrity_digest"}
+    report_copy = {k: v for k, v in report.items() if k not in ("package_integrity_digest", "package_signature")}
     calc_digest = hashlib.sha256(canonical_json_bytes(report_copy)).hexdigest()
     if not declared_digest or declared_digest.lower() != calc_digest.lower():
         issues.append(f"Package integrity digest mismatch: declared {declared_digest} != calculated {calc_digest}")
+    elif key_bytes and report.get("package_signature"):
+        expected_pkg_sig = hmac.new(key_bytes, declared_digest.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected_pkg_sig.lower(), str(report.get("package_signature")).lower()):
+            issues.append("Package HMAC signature verification failed")
 
     # 2. Re-hash every packaged file
     artifact_hashes = report.get("artifact_hashes", {})
@@ -155,12 +189,22 @@ def verify_package_integrity(package_dir: Path | str, key_file: Optional[Path | 
         if actual_hash.lower() != expected_hash.lower():
             issues.append(f"Tampered file {rel_path}: actual SHA {actual_hash} != expected {expected_hash}")
 
-    # 3. Verify approval receipt HMAC if key provided
+    # 3. Verify packaged ledger checkpoint signature if present
+    chk_p = p_dir / "audit" / "ledger_checkpoint.json"
+    if chk_p.exists() and key_bytes:
+        chk_data = load_json(chk_p)
+        chk_sig = chk_data.get("signature")
+        if chk_sig:
+            chk_copy = {k: v for k, v in chk_data.items() if k != "signature"}
+            exp_chk_sig = hmac.new(key_bytes, canonical_json_bytes(chk_copy), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(chk_sig.lower(), exp_chk_sig.lower()):
+                issues.append("Packaged ledger_checkpoint.json HMAC signature mismatch")
+
+    # 4. Verify approval receipt HMAC if key provided
     app_p = p_dir / "approvals" / "approval_receipt.json"
     if not app_p.exists():
         app_p = p_dir / "approval_receipt.json"
-    if app_p.exists() and key_file:
-        key_bytes = load_signing_key(key_file)
+    if app_p.exists() and key_bytes:
         app_data = load_json(app_p)
         ok, r_issues = verify_approval_receipt(app_data, key_bytes, expected_case_id=report.get("case_id"))
         if not ok:

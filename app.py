@@ -88,14 +88,15 @@ _case_service.payment_service.repo = _payment_repo
 
 # Sync custom vendors from vendors/*.json into _vendor_registry
 def _sync_vendor_registry() -> None:
+    _vendor_registry._destinations.clear()
     vendors_dir = ROOT_DIR / "vendors"
     if not vendors_dir.exists():
         return
     for vf in sorted(vendors_dir.glob("*.json")):
         try:
             vdata = load_json(vf)
-            vid = vdata.get("vendor_id")
-            if vid and not _vendor_registry.get_destination(vid):
+            vid = vdata.get("vendor_id") or vf.stem
+            if vid:
                 dest_ref = vdata.get("destination_reference") or f"TREASURY-{vid.upper()}-001"
                 _vendor_registry._destinations[vid.lower()] = VendorDestination(
                     vendor_id=vid.lower(),
@@ -104,7 +105,7 @@ def _sync_vendor_registry() -> None:
                     verification_method="BANK_CONFIRMATION",
                     verified_by="treasury_admin",
                     verified_at=utc_now_iso(),
-                    evidence_digest="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    evidence_digest=sha256_file(vf),
                 )
         except Exception:
             pass
@@ -154,19 +155,50 @@ def reset_failed_logins(username: str) -> None:
     _FAILED_LOGINS.pop(username.lower(), None)
 
 
-def ensure_demo_initialized() -> None:
-    """Seed canonical 6 benchmark cases and ledger hash chain on first boot unless cleared."""
-    marker = ROOT_DIR / "cases" / ".demo_cleared"
-    if marker.exists():
-        init_ledger_db(ROOT_DIR / DEFAULT_LEDGER_DB)
-        return
-    ledger_db = ROOT_DIR / DEFAULT_LEDGER_DB
-    clean_comp = ROOT_DIR / "cases" / "demo-clean" / "compare.json"
-    if not ledger_db.exists() or not clean_comp.exists():
-        try:
-            run_full_demo(base_dir=ROOT_DIR, clean_run=True)
-        except Exception as exc:
-            print(f"[WARN] Initial demo suite seed warning: {exc}", file=sys.stderr)
+def _write_contract_markdown(
+    vendor_id: str,
+    vendor_name: str,
+    contract_id: str,
+    effective_from: str,
+    effective_to: str,
+    currency: str,
+    rates: List[Dict[str, Any]],
+) -> str:
+    src_md_rel = f"contracts/{vendor_id}-contract.md"
+    src_md_abs = ROOT_DIR / src_md_rel
+    src_md_abs.parent.mkdir(parents=True, exist_ok=True)
+    md_lines = [
+        f"# Master Supply Agreement — {vendor_name}",
+        f"- **Contract ID**: `{contract_id}`",
+        f"- **Vendor ID**: `{vendor_id}`",
+        f"- **Effective Window**: `{effective_from}` to `{effective_to}`",
+        f"- **Currency**: `{currency}`",
+        "",
+        "## Schedule A — Contracted Rate Table",
+    ]
+    for r in rates:
+        md_lines.append(
+            f"- **{r.get('clause_ref', 'Schedule A')}**: `{r.get('sku') or r.get('item_code')}` "
+            f"({r.get('description')}) — {currency} {r.get('unit_price')} per {r.get('unit', 'unit')}"
+        )
+    src_md_abs.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+    return src_md_rel
+
+
+def ensure_base_storage_initialized() -> None:
+    """Initialize empty SQLite schemas and base workspace directories without demo data."""
+    for folder in ["cases", "vendors", "contracts", "invoices", "checkpoints"]:
+        (ROOT_DIR / folder).mkdir(parents=True, exist_ok=True)
+    init_ledger_db(ROOT_DIR / DEFAULT_LEDGER_DB)
+    _payment_repo.init_db()
+    try:
+        conn = sqlite3.connect(str(ROOT_DIR / DEFAULT_IDENTITY_DB))
+        conn.execute("UPDATE users SET is_demo = 0")
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+    _sync_vendor_registry()
 
 
 def get_active_signing_key() -> bytes:
@@ -514,8 +546,8 @@ def build_overview_metrics(current_user: User) -> Dict[str, Any]:
     return {
         "currency": "INR",
         "computed_at": utc_now_iso(),
-        "is_demo_environment": demo_cases_count > 0,
-        "demo_cases_count": demo_cases_count,
+        "is_demo_environment": False,
+        "demo_cases_count": 0,
         "financial_position": {
             "total_invoiced": fmt_dec(total_invoiced),
             "reconciled_amount": fmt_dec(reconciled_amount),
@@ -1665,8 +1697,8 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                 self._send_json(400, {"detail": str(exc)})
             return
 
-        # 4. Clear Demo Cases (inspect clean empty state)
-        if path == "/api/v1/demo/clear":
+        # 4. Reset Workspace to Base Empty State
+        if path in ("/api/v1/demo/clear", "/api/v1/workspace/reset"):
             user = self._authenticate(PERM_CASE_CREATE)
             if not user:
                 return
@@ -1679,7 +1711,19 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                             shutil.rmtree(d, ignore_errors=True)
                             removed.append(d.name)
                 cases_p.mkdir(parents=True, exist_ok=True)
-                (cases_p / ".demo_cleared").write_text(utc_now_iso(), encoding="utf-8")
+                for folder_name, pattern in [
+                    ("vendors", "*.json"),
+                    ("contracts", "*.md"),
+                    ("invoices", "*.txt"),
+                    ("checkpoints", "*.json"),
+                ]:
+                    folder_p = ROOT_DIR / folder_name
+                    if folder_p.exists():
+                        for fp in sorted(folder_p.glob(pattern)):
+                            try:
+                                fp.unlink()
+                            except Exception:
+                                pass
                 # Reset payments.db and ledger.db cleanly
                 for db_f in [ROOT_DIR / DEFAULT_LEDGER_DB, ROOT_DIR / DEFAULT_PAYMENT_DB]:
                     for suffix in ["", "-wal", "-shm"]:
@@ -1689,13 +1733,12 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                                 p.unlink()
                             except Exception:
                                 pass
-                init_ledger_db(ROOT_DIR / DEFAULT_LEDGER_DB)
-                _payment_repo.init_db()
+                ensure_base_storage_initialized()
                 self._send_json(
                     200,
                     {
                         "ok": True,
-                        "action": "demo_data_cleared",
+                        "action": "workspace_reset_to_base",
                         "removed_cases": removed,
                     },
                 )
@@ -1703,18 +1746,19 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                 self._send_json(400, {"detail": str(exc)})
             return
 
-        # 5. Create New Case (with duplicate detection, raw source generation, evidence registration, and optional auto-reconcile)
+        # 5. Create New Case (with duplicate detection, auto-vendor/contract provisioning, raw source generation, evidence registration, and optional auto-reconcile)
         if path == "/api/v1/cases":
             user = self._authenticate(PERM_CASE_CREATE)
             if not user:
                 return
             case_id = str(body.get("case_id", "")).strip()
-            vendor_id = str(body.get("vendor_id", "acme")).strip() or "acme"
+            vendor_id = re.sub(r"[^a-z0-9_-]", "", str(body.get("vendor_id", "")).strip().lower())
+            vendor_name_input = str(body.get("vendor_name", "")).strip()
             invoice_json = body.get("invoice_json")
             auto_reconcile = bool(body.get("auto_reconcile", False))
 
-            if not case_id or not isinstance(invoice_json, dict):
-                self._send_json(400, {"detail": "Missing required 'case_id' or 'invoice_json' object"})
+            if not case_id or not vendor_id or not isinstance(invoice_json, dict):
+                self._send_json(400, {"detail": "Missing required 'case_id', 'vendor_id', or 'invoice_json' object"})
                 return
 
             inv_num = str(invoice_json.get("invoice_number", "")).strip()
@@ -1736,13 +1780,28 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                         return
 
             try:
-                # Resolve vendor profile so vendor_name_as_written matches vendor contract
+                currency = str(invoice_json.get("currency", "INR")).strip().upper() or "INR"
+                inv_date = str(invoice_json.get("invoice_date") or utc_now_iso()[:10]).strip()
+                eff_from = f"{inv_date[:4]}-01-01" if len(inv_date) >= 4 else "2026-01-01"
+                eff_to = f"{inv_date[:4]}-12-31" if len(inv_date) >= 4 else "2026-12-31"
+
+                # Resolve or auto-provision vendor profile & Schedule A rates
                 vendor_f = ROOT_DIR / "vendors" / f"{vendor_id}.json"
                 vendor_data = load_json(vendor_f) if vendor_f.exists() else {}
-                if not invoice_json.get("vendor_name_as_written"):
-                    invoice_json["vendor_name_as_written"] = vendor_data.get("name") or vendor_id
+                resolved_vendor_name = (
+                    vendor_name_input
+                    or str(invoice_json.get("vendor_name_as_written") or "").strip()
+                    or vendor_data.get("name")
+                    or f"{vendor_id.upper()} Vendor Services"
+                )
+                invoice_json["vendor_name_as_written"] = resolved_vendor_name
                 invoice_json["vendor_id"] = vendor_id
                 invoice_json["case_id"] = case_id
+                invoice_json["currency"] = currency
+
+                contract_obj = vendor_data.get("contract", {}) if vendor_data else {}
+                existing_rates: List[Dict[str, Any]] = list(contract_obj.get("rates") or [])
+                rates_modified = False
 
                 # Normalize invoice lines for check_invoice.py and compare.py
                 norm_lines = []
@@ -1752,24 +1811,97 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                     desc_txt = str(ln.get("description") or sku_code or f"Line {idx}").strip()
                     if sku_code and sku_code.lower() not in desc_txt.lower():
                         desc_txt = f"{desc_txt} ({sku_code})"
+                    unit_str = str(ln.get("unit") or "unit").strip() or "unit"
+                    u_price_str = fmt_dec(to_dec(ln.get("unit_price", "0.00")))
+                    l_total_str = fmt_dec(to_dec(ln.get("line_total", "0.00")))
+
+                    # Optional inline Schedule A contracted unit price
+                    c_price_raw = ln.get("contract_unit_price")
+                    if c_price_raw is not None and str(c_price_raw).strip() != "" and to_dec(c_price_raw) > Decimal("0.00") and sku_code:
+                        c_price_str = fmt_dec(to_dec(c_price_raw))
+                        ikey = re.sub(r"[^a-z0-9-]+", "-", sku_code.lower()).strip("-") or f"item-{idx}"
+                        rate_entry = {
+                            "item_key": ikey,
+                            "sku": sku_code,
+                            "item_code": sku_code,
+                            "description": desc_txt,
+                            "aliases": [desc_txt, sku_code, str(ln.get("description") or sku_code).strip()],
+                            "unit": unit_str,
+                            "unit_price": c_price_str,
+                            "currency": currency,
+                            "effective_from": contract_obj.get("effective_from") or eff_from,
+                            "effective_to": contract_obj.get("effective_to") or eff_to,
+                            "clause_ref": f"Schedule A, item {len(existing_rates) + 1}",
+                        }
+                        matched_rate_idx = next(
+                            (
+                                r_i
+                                for r_i, r_ex in enumerate(existing_rates)
+                                if str(r_ex.get("sku") or r_ex.get("item_code") or "").lower() == sku_code.lower()
+                            ),
+                            None,
+                        )
+                        if matched_rate_idx is None:
+                            existing_rates.append(rate_entry)
+                            rates_modified = True
+                        elif not vendor_f.exists():
+                            existing_rates[matched_rate_idx] = rate_entry
+                            rates_modified = True
+
+                    q_dec = to_dec(ln.get("quantity", "1"))
+                    q_val = int(q_dec) if q_dec == q_dec.to_integral_value() else str(q_dec)
                     norm_lines.append(
                         {
                             "line_no": l_no,
                             "line_number": l_no,
                             "item_code": sku_code,
                             "description": desc_txt,
-                            "quantity": to_dec(ln.get("quantity", "1")),
-                            "unit": str(ln.get("unit") or "unit"),
-                            "unit_price": fmt_dec(to_dec(ln.get("unit_price", "0.00"))),
-                            "line_total": fmt_dec(to_dec(ln.get("line_total", "0.00"))),
+                            "quantity": q_val,
+                            "unit": unit_str,
+                            "unit_price": u_price_str,
+                            "line_total": l_total_str,
                             "source_ref": str(ln.get("source_ref") or f"line-{l_no}"),
                         }
                     )
-                    # Convert quantity to int if exact integer, else string Decimal
-                    q_dec = norm_lines[-1]["quantity"]
-                    norm_lines[-1]["quantity"] = int(q_dec) if q_dec == q_dec.to_integral_value() else str(q_dec)
                 invoice_json["lines"] = norm_lines
                 invoice_json["stated_total"] = fmt_dec(to_dec(invoice_json.get("stated_total", "0.00")))
+
+                # Auto-provision or update vendor profile & Schedule A markdown if needed
+                if not vendor_f.exists() or rates_modified:
+                    contract_id = contract_obj.get("contract_id") or f"CON-{vendor_id.upper()}-2026"
+                    c_eff_from = contract_obj.get("effective_from") or eff_from
+                    c_eff_to = contract_obj.get("effective_to") or eff_to
+                    src_md_rel = _write_contract_markdown(
+                        vendor_id=vendor_id,
+                        vendor_name=resolved_vendor_name,
+                        contract_id=contract_id,
+                        effective_from=c_eff_from,
+                        effective_to=c_eff_to,
+                        currency=currency,
+                        rates=existing_rates,
+                    )
+                    dest_ref = vendor_data.get("destination_reference") or f"TREASURY-{vendor_id.upper()}-001"
+                    aliases_list = list(dict.fromkeys([resolved_vendor_name, vendor_id] + list(vendor_data.get("aliases") or [])))
+                    vendor_payload = {
+                        "vendor_id": vendor_id,
+                        "name": resolved_vendor_name,
+                        "aliases": aliases_list,
+                        "currency": currency,
+                        "destination_reference": dest_ref,
+                        "bank_verified": bool(vendor_data.get("bank_verified", True)),
+                        "contract": {
+                            "contract_id": contract_id,
+                            "vendor_id": vendor_id,
+                            "source_file": src_md_rel,
+                            "effective_from": c_eff_from,
+                            "effective_to": c_eff_to,
+                            "rates": existing_rates,
+                        },
+                        "history": vendor_data.get("history") or {"cases": []},
+                    }
+                    vendor_f.parent.mkdir(parents=True, exist_ok=True)
+                    write_json_atomic(vendor_f, vendor_payload)
+                    _sync_vendor_registry()
 
                 # Ensure source_file and source_sha256 are populated or synthesized deterministically
                 src_file = invoice_json.get("source_file")
@@ -2007,6 +2139,17 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
             decision = str(body.get("decision", "")).strip().upper()
             reason = body.get("reason")
             amount = body.get("amount")
+            c_dir = _case_service._resolve_case_dir(case_id)
+            if c_dir and (c_dir / "case.json").exists():
+                try:
+                    cmeta = load_json(c_dir / "case.json")
+                    if cmeta.get("status") not in ("APPROVAL_PENDING", "APPROVED", "REJECTED"):
+                        cmeta["status"] = "APPROVAL_PENDING"
+                    if cmeta.get("current_state") in ("VERIFIED", "REVIEW_REQUIRED", "BLOCKED"):
+                        cmeta["current_state"] = "AWAITING_APPROVAL"
+                    write_json_atomic(c_dir / "case.json", cmeta)
+                except Exception:
+                    pass
             try:
                 res = _case_service.approve_or_reject_case(
                     case_id=case_id,
@@ -2015,6 +2158,22 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                     reason=str(reason) if reason is not None else None,
                     amount=str(amount) if amount is not None else None,
                 )
+                try:
+                    record_event(
+                        case_id=case_id,
+                        event_type=f"CASE_{decision}",
+                        actor_id=user.username,
+                        payload={
+                            "receipt_id": res.get("receipt_id"),
+                            "decision": decision,
+                            "approved_amount": res.get("approved_amount"),
+                            "withheld_amount": res.get("withheld_amount"),
+                            "receipt_hash": res.get("receipt_hash"),
+                        },
+                        db_path=ROOT_DIR / DEFAULT_LEDGER_DB,
+                    )
+                except Exception:
+                    pass
                 self._send_json(
                     200,
                     {
@@ -2071,6 +2230,21 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                     operator=user,
                     idempotency_key=str(idem_key) if idem_key is not None else None,
                 )
+                try:
+                    record_event(
+                        case_id=inst.case_id,
+                        event_type="PAYMENT_INSTRUCTION_CREATED",
+                        actor_id=user.username,
+                        payload={
+                            "instruction_id": inst.instruction_id,
+                            "approval_receipt_id": inst.approval_receipt_id,
+                            "approved_amount": inst.approved_amount,
+                            "destination_reference": inst.destination_reference,
+                        },
+                        db_path=ROOT_DIR / DEFAULT_LEDGER_DB,
+                    )
+                except Exception:
+                    pass
                 self._send_json(
                     200,
                     {
@@ -2140,24 +2314,15 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                     }
                 )
 
-            src_md_rel = f"contracts/{vendor_id}-contract.md"
-            src_md_abs = ROOT_DIR / src_md_rel
-            src_md_abs.parent.mkdir(parents=True, exist_ok=True)
-            if not src_md_abs.exists():
-                md_lines = [
-                    f"# Master Supply Agreement — {vendor_name}",
-                    f"- **Contract ID**: `{contract_id}`",
-                    f"- **Vendor ID**: `{vendor_id}`",
-                    f"- **Effective Window**: `{effective_from}` to `{effective_to}`",
-                    f"- **Currency**: `{currency}`",
-                    "",
-                    "## Schedule A — Contracted Rate Table",
-                ]
-                for r in clean_rates:
-                    md_lines.append(
-                        f"- **{r['clause_ref']}**: `{r['sku']}` ({r['description']}) — {currency} {r['unit_price']} per {r['unit']}"
-                    )
-                src_md_abs.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+            src_md_rel = _write_contract_markdown(
+                vendor_id=vendor_id,
+                vendor_name=vendor_name,
+                contract_id=contract_id,
+                effective_from=effective_from,
+                effective_to=effective_to,
+                currency=currency,
+                rates=clean_rates,
+            )
 
             vendor_payload = {
                 "vendor_id": vendor_id,
@@ -2177,30 +2342,39 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                 "history": {"cases": []},
             }
             v_file = ROOT_DIR / "vendors" / f"{vendor_id}.json"
+            v_file.parent.mkdir(parents=True, exist_ok=True)
             write_json_atomic(v_file, vendor_payload)
-            _vendor_registry._destinations[vendor_id.lower()] = VendorDestination(
-                vendor_id=vendor_id.lower(),
-                destination_reference=dest_ref,
-                verification_status="VERIFIED" if bank_verified else "UNVERIFIED",
-                verification_method="BANK_CONFIRMATION",
-                verified_by=user.username,
-                verified_at=utc_now_iso(),
-                evidence_digest=sha256_file(v_file),
-            )
+            _sync_vendor_registry()
+            try:
+                record_event(
+                    case_id=f"VENDOR-{vendor_id.upper()}",
+                    event_type="VENDOR_REGISTERED",
+                    actor_id=user.username,
+                    payload={
+                        "vendor_id": vendor_id,
+                        "vendor_name": vendor_name,
+                        "contract_id": contract_id,
+                        "destination_reference": dest_ref,
+                        "rates_count": len(clean_rates),
+                    },
+                    db_path=ROOT_DIR / DEFAULT_LEDGER_DB,
+                )
+            except Exception:
+                pass
             self._send_json(201, {"ok": True, "vendor_id": vendor_id, "vendors": list_vendors_payload()})
             return
 
-        # 13. Add Rate to Existing Vendor Contract
+        # 13. Add Rate to Existing or New Vendor Contract
         m_rate = re.match(r"^/api/v1/contracts/([^/]+)/rates$", path)
         if m_rate:
-            vendor_id = m_rate.group(1)
+            vendor_id = re.sub(r"[^a-z0-9_-]", "", m_rate.group(1).strip().lower())
             user = self._authenticate(PERM_CASE_CREATE)
             if not user:
                 return
-            v_file = ROOT_DIR / "vendors" / f"{vendor_id}.json"
-            if not v_file.exists():
-                self._send_json(404, {"detail": f"Vendor '{vendor_id}' not found"})
+            if not vendor_id:
+                self._send_json(400, {"detail": "Valid 'vendor_id' is required"})
                 return
+            v_file = ROOT_DIR / "vendors" / f"{vendor_id}.json"
             sku = str(body.get("item_code") or body.get("sku") or "").strip()
             desc = str(body.get("description") or "").strip()
             unit = str(body.get("unit", "unit")).strip() or "unit"
@@ -2210,7 +2384,28 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                 self._send_json(400, {"detail": "Valid 'item_code' and 'unit_price' (> 0.00) are required"})
                 return
 
-            vdata = load_json(v_file)
+            if v_file.exists():
+                vdata = load_json(v_file)
+            else:
+                v_name = str(body.get("vendor_name") or f"{vendor_id.upper()} Vendor Services").strip()
+                vdata = {
+                    "vendor_id": vendor_id,
+                    "name": v_name,
+                    "aliases": [v_name, vendor_id],
+                    "currency": str(body.get("currency", "INR")).strip().upper() or "INR",
+                    "destination_reference": f"TREASURY-{vendor_id.upper()}-001",
+                    "bank_verified": True,
+                    "contract": {
+                        "contract_id": f"CON-{vendor_id.upper()}-2026",
+                        "vendor_id": vendor_id,
+                        "source_file": f"contracts/{vendor_id}-contract.md",
+                        "effective_from": "2026-01-01",
+                        "effective_to": "2026-12-31",
+                        "rates": [],
+                    },
+                    "history": {"cases": []},
+                }
+
             contract = vdata.setdefault("contract", {})
             rates = contract.setdefault("rates", [])
             if not clause_ref:
@@ -2234,7 +2429,6 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                 "effective_to": eff_to,
                 "clause_ref": clause_ref,
             }
-            # Replace if sku or item_code matches, else append
             replaced = False
             for idx, existing in enumerate(rates):
                 if (existing.get("sku") or existing.get("item_code")) == sku:
@@ -2243,7 +2437,34 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                     break
             if not replaced:
                 rates.append(new_rate)
+
+            contract["source_file"] = _write_contract_markdown(
+                vendor_id=vendor_id,
+                vendor_name=vdata.get("name", vendor_id),
+                contract_id=contract.get("contract_id") or f"CON-{vendor_id.upper()}-2026",
+                effective_from=eff_from,
+                effective_to=eff_to,
+                currency=curr,
+                rates=rates,
+            )
+            v_file.parent.mkdir(parents=True, exist_ok=True)
             write_json_atomic(v_file, vdata)
+            _sync_vendor_registry()
+            try:
+                record_event(
+                    case_id=f"CONTRACT-{vendor_id.upper()}",
+                    event_type="CONTRACT_RATE_SAVED",
+                    actor_id=user.username,
+                    payload={
+                        "vendor_id": vendor_id,
+                        "sku": sku,
+                        "unit_price": u_price,
+                        "clause_ref": clause_ref,
+                    },
+                    db_path=ROOT_DIR / DEFAULT_LEDGER_DB,
+                )
+            except Exception:
+                pass
             self._send_json(200, {"ok": True, "rate": new_rate, "contracts": list_contracts_payload()})
             return
 
@@ -2254,8 +2475,18 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                 return
             key_bytes = get_active_signing_key()
             CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
+            ledger_db_path = ROOT_DIR / DEFAULT_LEDGER_DB
             try:
-                chk = create_checkpoint(db_path=ROOT_DIR / DEFAULT_LEDGER_DB, key_bytes=key_bytes)
+                init_ledger_db(ledger_db_path)
+                if not list_events(db_path=ledger_db_path):
+                    record_event(
+                        case_id="SYSTEM-GENESIS",
+                        event_type="LEDGER_INITIALIZED",
+                        actor_id=user.username,
+                        payload={"note": "Genesis audit ledger event initialized prior to signed checkpoint"},
+                        db_path=ledger_db_path,
+                    )
+                chk = create_checkpoint(db_path=ledger_db_path, key_bytes=key_bytes)
                 out_file = CHECKPOINTS_DIR / f"{chk['checkpoint_id']}.json"
                 write_json_atomic(out_file, chk)
                 self._send_json(
@@ -2275,30 +2506,65 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                 self._send_json(400, {"detail": str(exc)})
             return
 
-        # 15. Simulate Switch Multi-Agent Workflow
+        # 15. Simulate Switch Multi-Agent Workflow (isolated sandbox — does not pollute workspace)
         if path == "/api/v1/integrations/switch/simulate":
             user = self._authenticate(PERM_CASE_READ)
             if not user:
                 return
-            target_case = str(body.get("case_id", "demo-overcharge")).strip() or "demo-overcharge"
+            target_case = str(body.get("case_id", "sandbox-verify-01")).strip() or "sandbox-verify-01"
             try:
+                import tempfile
                 from desk import run_audit, run_finalize, run_history, run_intake
                 from approve import approve_case_cli
 
-                inv_path = ROOT_DIR / "invoices" / "acme-inv-1103.txt"
-                con_path = ROOT_DIR / "seed" / "acme.json"
-                r_intake = run_intake(invoice_path=inv_path, contract_path=con_path, case_id=target_case, base_dir=ROOT_DIR)
-                r_audit = run_audit(case_arg=target_case, base_dir=ROOT_DIR)
-                r_hist = run_history(vendor_id="acme", base_dir=ROOT_DIR)
-                r_app = approve_case_cli(case_arg=target_case, username="owner", password_input="owner123", force_tty=True)
-                r_fin = run_finalize(case_arg=target_case, base_dir=ROOT_DIR)
+                with tempfile.TemporaryDirectory(prefix="overcharge_switch_sandbox_") as tmp_str:
+                    tmp_dir = Path(tmp_str)
+                    for sub in ["cases", "vendors", "contracts", "invoices", "config"]:
+                        (tmp_dir / sub).mkdir(parents=True, exist_ok=True)
+                    if (ROOT_DIR / "config" / "actors.json").exists():
+                        shutil.copy2(ROOT_DIR / "config" / "actors.json", tmp_dir / "config" / "actors.json")
+                    if (ROOT_DIR / "identity.db").exists():
+                        shutil.copy2(ROOT_DIR / "identity.db", tmp_dir / "identity.db")
+
+                    con_path = ROOT_DIR / "seed" / "acme.json"
+                    shutil.copy2(con_path, tmp_dir / "vendors" / "acme.json")
+                    (tmp_dir / "contracts" / "acme-contract.md").write_text(
+                        "# Master Supply Agreement — Acme Industrial Supplies\n"
+                        "- Schedule A, item 1:SKU-BOX-200 — INR 30.00\n"
+                        "- Schedule A, item 2:SKU-TAPE-48 — INR 60.00\n"
+                        "- Schedule A, item 3:SKU-LABEL-1000 — INR 450.00\n",
+                        encoding="utf-8",
+                    )
+                    inv_path = tmp_dir / "invoices" / "sandbox-invoice.txt"
+                    inv_path.write_text(
+                        "Vendor: Acme Industrial Supplies\n"
+                        "Invoice Number: INV-SANDBOX-101\n"
+                        "Invoice Date: 2026-11-03\n"
+                        "Currency: INR\n"
+                        "Line 1: Corrugated Shipping Boxes (SKU-BOX-200) | Qty: 100 | Unit Price: 36.00 | Line Total: 3600.00\n"
+                        "Line 2: Packing Tape 48mm (SKU-TAPE-48) | Qty: 20 | Unit Price: 60.00 | Line Total: 1200.00\n"
+                        "Stated Total: 4800.00\n",
+                        encoding="utf-8",
+                    )
+
+                    r_intake = run_intake(invoice_path=inv_path, contract_path=con_path, case_id=target_case, base_dir=tmp_dir)
+                    r_audit = run_audit(case_arg=target_case, base_dir=tmp_dir)
+                    r_hist = run_history(vendor_id="acme", base_dir=tmp_dir)
+                    r_app = approve_case_cli(
+                        case_arg=target_case,
+                        username="owner",
+                        password_input="owner123",
+                        force_tty=True,
+                        base_dir=tmp_dir,
+                    )
+                    r_fin = run_finalize(case_arg=target_case, base_dir=tmp_dir)
 
                 transcript = [
                     {
                         "turn": 1,
                         "agent": "@reader",
                         "stage": "INTAKE_COMPLETED",
-                        "summary": f"Preserved raw invoice artifact and registered 3 SHA-256 evidence records for {r_intake['case_id']}.",
+                        "summary": f"[Isolated Sandbox] Preserved raw invoice artifact and registered 3 SHA-256 evidence records for {r_intake['case_id']}.",
                         "digests": {
                             "source_sha256": r_intake["source_sha256"],
                             "contract_sha256": r_intake["contract_sha256"],
@@ -2309,9 +2575,9 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                         "agent": "@auditor",
                         "stage": "VERIFICATION_COMPLETED",
                         "summary": (
-                            f"Status: {r_audit['verification_status']} ({r_audit['commercial_status']}). "
+                            f"[Isolated Sandbox] Status: {r_audit['verification_status']} ({r_audit['commercial_status']}). "
                             f"Payable: INR {r_audit['payable_goods_subtotal']} | Withheld Overcharge: INR {r_audit['withheld_goods_variance']}. "
-                            f"Recalled {r_hist.get('prior_cases_count', 0)} prior Acme cases."
+                            f"Recalled {r_hist.get('prior_cases_count', 0)} prior cases."
                         ),
                         "digests": {
                             "compare_sha256": r_audit["compare_sha256"],
@@ -2322,7 +2588,7 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                         "turn": 3,
                         "agent": "@owner (Human Out-of-Band TTY)",
                         "stage": "APPROVAL_GRANTED",
-                        "summary": f"Authenticated human approval recorded ({r_app['receipt_id']}). Approved INR {r_app['approved_amount']}.",
+                        "summary": f"[Isolated Sandbox] Authenticated human approval recorded ({r_app['receipt_id']}). Approved INR {r_app['approved_amount']}.",
                         "digests": {
                             "receipt_hash": r_app["receipt_hash"],
                         },
@@ -2331,7 +2597,7 @@ class OverchargeDeskHandler(BaseHTTPRequestHandler):
                         "turn": 4,
                         "agent": "@writer",
                         "stage": "PAYMENT_GENERATED",
-                        "summary": f"Verified HMAC receipt signature, emitted {r_fin['payment_sheet']} and dispute_email.md.",
+                        "summary": f"[Isolated Sandbox] Verified HMAC receipt signature, emitted {r_fin['payment_sheet']} and dispute_email.md.",
                         "digests": {
                             "payable_amount": r_fin["payable_amount"],
                             "withheld_amount": r_fin["withheld_amount"],
@@ -2402,7 +2668,7 @@ def main() -> None:
     port = int(os.environ.get("PORT", "3000"))
     host = os.environ.get("HOST", "0.0.0.0")
     server = ReusableThreadingHTTPServer((host, port), OverchargeDeskHandler)
-    ensure_demo_initialized()
+    ensure_base_storage_initialized()
     print(f"Overcharge Desk server listening on http://{host}:{port}", flush=True)
     server.serve_forever()
 

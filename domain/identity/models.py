@@ -103,11 +103,13 @@ class IdentityService:
                 )
 
     def authenticate(self, username: str, password: str) -> Optional[User]:
-        """Authenticate user against Argon2id hash with rehash support."""
+        """Authenticate user against Argon2id hash with rehash support. Refuses demo identities in production."""
         if not username or not password:
             return None
         user_rec = self.repo.get_user_by_username(username)
         if not user_rec or not user_rec.is_active:
+            return None
+        if self.app_env.lower() == "production" and user_rec.is_demo:
             return None
 
         if not verify_password(password, user_rec.password_hash):
@@ -146,6 +148,8 @@ class IdentityService:
 
     def issue_session_token(self, user: User) -> str:
         """Issue an opaque cryptographically random bearer token and persist its SHA-256 hash."""
+        if self.app_env.lower() == "production" and user.is_demo:
+            raise ToolError("Cannot issue session token for demo identity in production", 4)
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
@@ -174,6 +178,8 @@ class IdentityService:
 
         user_rec = self.repo.get_user_by_id(session.user_id)
         if not user_rec or not user_rec.is_active:
+            return None
+        if self.app_env.lower() == "production" and user_rec.is_demo:
             return None
 
         # Touch session activity

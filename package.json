@@ -1,0 +1,12 @@
+{
+  "name": "overcharge-desk",
+  "private": true,
+  "version": "3.3.0",
+  "scripts": {
+    "dev": "python3 app.py",
+    "start": "python3 app.py",
+    "build": "python3 -m py_compile app.py tools/desk.py tools/evidence.py tools/auth.py tools/approval_receipt.py tools/approval_gateway.py tools/approve.py tools/pipeline.py tools/export_audit_package.py tools/simulate_switch.py tools/validate_comparison.py",
+    "lint": "python3 -m py_compile app.py tools/desk.py tools/evidence.py tools/auth.py tools/approval_receipt.py tools/approval_gateway.py tools/approve.py tools/pipeline.py tools/export_audit_package.py tools/simulate_switch.py tools/validate_comparison.py",
+    "test": "PYTHONPATH=tools:. python3 tests/test_repository_audit_remediations.py"
+  }
+}
