@@ -1,0 +1,1042 @@
+Looking at this screenshot, I think Overcharge Desk needs a much bigger refinement than simply changing its colours or making the cards look better.
+
+**The objective should be to turn Overcharge Desk into a serious, production-grade financial control and vendor reconciliation platform — not a dashboard that looks like a hackathon prototype.**
+
+The underlying engineering is already ambitious. Exact decimal arithmetic, separation of duties, evidence management, cryptographic ledger verification, approval controls and fail-closed behaviour are the foundations. The interface needs to communicate that level of engineering.
+
+I would approach this as a complete product redesign and engineering audit.
+
+# 1. What I would change
+
+## A. Visual identity — completely rethink it
+
+Your requested direction:
+
+**Pure black × white × restrained functional colours.**
+
+Two themes, with a proper reverse option.
+
+
+
+| Element | Primary theme | Reverse theme |
+|---|---|---|
+| Background | Pure black `#000000` | Pure white `#FFFFFF` |
+| Main surfaces | `#080808` | `#F7F7F7` |
+| Cards | `#0D0D0D` | `#FFFFFF` |
+| Borders | `#252525` | `#E5E5E5` |
+| Primary text | `#FFFFFF` | `#000000` |
+| Secondary text | `#A0A0A0` | `#666666` |
+| Success | Restrained green | Restrained green |
+| Warning | Amber | Amber |
+| Error | Red | Red |
+
+No purple gradients. No unnecessary neon. No excessive shadows. No random colours.
+
+The theme switch must change the entire application, including tables, modals, dropdowns, charts, notifications, forms and status indicators.
+
+## B. Remove these things
+
+From the current screenshot:
+
+1. Remove the logo and icon-based brand mark.
+2. Remove the artificial version badge.
+3. Remove the hardcoded financial statistics.
+4. Remove the hardcoded benchmark cases.
+5. Remove the fake automated CI test counter.
+6. Remove the misleading genesis-anchored indicator unless verified against the actual ledger.
+7. Remove the artificial role selector if it is not backed by authenticated permissions.
+8. Remove the Preview artefact.
+9. Remove unnecessary decorative icons.
+10. Remove the large unused space in the dashboard.
+11. Remove any placeholder functionality presented as operational functionality.
+
+The interface should never claim something works unless the underlying system confirms it.
+
+## C. Rebuild the information architecture
+
+I would structure the application like this:
+
+| Section | Purpose |
+|---|---|
+| Overview | Actual financial control overview |
+| Reconciliation | All vendor reconciliation cases |
+| New Case | Create a reconciliation case |
+| Evidence | Uploaded invoices, contracts and supporting documents |
+| Vendors | Vendor profiles and contractual information |
+| Contracts | Contractual pricing, rates and terms |
+| Approvals | Pending financial approvals |
+| Payment Control | Approved, withheld and rejected payments |
+| Audit Ledger | Append-only cryptographic audit history |
+| Integrations | Switch, Mattermost and other supported integrations |
+| System Health | Actual service, database, verification and test status |
+| Settings | Users, roles, permissions and appearance |
+
+The sidebar should be compact, readable and functional.
+
+---
+
+# 2. The master prompts
+
+I would not give an AI coding agent one vague instruction saying "redesign everything."
+
+I would give it a sequence of engineering instructions, with one overarching specification.
+
+These prompts are designed to work against your **existing Overcharge Desk repository**, preserving working functionality and improving it rather than replacing everything with a superficial new implementation.
+
+## PROMPT 1 — Master Product Transformation
+
+This establishes the complete end goal.
+
+You are acting as the combined engineering team responsible for transforming Overcharge Desk into a production-grade financial operations, vendor reconciliation, evidence management and cryptographic payment control platform.
+
+Your responsibilities include:
+
+- Principal Software Architect
+- Senior Backend Engineer
+- Senior Frontend Engineer
+- Financial Systems Engineer
+- Application Security Engineer
+- Database Architect
+- QA and Reliability Engineer
+- Product Designer
+
+PROJECT:
+Overcharge Desk
+
+EXISTING PROJECT:
+Work directly with the existing repository. Inspect its architecture, source files, database structures, APIs, tests, workflows and integrations before making modifications.
+
+CORE OBJECTIVE:
+
+Transform the existing project into a genuinely functional, reliable and professionally designed financial control platform.
+
+This is NOT a request to create another dashboard prototype.
+
+Every displayed number must come from actual application data.
+Every action must perform a real operation.
+Every approval must enforce actual authorization.
+Every audit record must be verifiable.
+Every failure must be handled safely.
+
+NON-NEGOTIABLE RULES:
+
+1. Do not unnecessarily rewrite functioning existing components.
+2. Do not duplicate existing modules.
+3. Do not create alternative implementations of existing business logic.
+4. Do not introduce mock data into production workflows.
+5. Do not invent financial figures, test results, ledger events or verification states.
+6. Do not use floating-point arithmetic for financial calculations.
+7. Do not weaken existing security invariants.
+8. Do not bypass authorization checks in frontend or backend.
+9. Do not silently swallow errors.
+10. Do not mark incomplete functionality as completed.
+11. Do not leave dead buttons, fake interactions or decorative controls.
+12. Do not sacrifice backend integrity for frontend convenience.
+
+FIRST: UNDERSTAND THE EXISTING SYSTEM.
+
+Map every existing module and identify:
+
+- Existing capabilities.
+- Working business workflows.
+- Backend architecture.
+- Financial calculation engine.
+- Evidence handling.
+- Authentication and authorization.
+- Separation-of-duties enforcement.
+- Approval gateway.
+- Audit ledger.
+- Hash-chain verification.
+- Payment export functionality.
+- Integrations.
+- Automated tests.
+- Existing limitations and unfinished functionality.
+
+Create a dependency map before implementation.
+
+Preserve working functionality and existing interfaces wherever possible.
+
+PRODUCT DESIGN:
+
+Completely redesign the application around a sophisticated monochromatic financial operations aesthetic.
+
+DEFAULT THEME:
+Pure black background with white typography.
+
+REVERSE THEME:
+Pure white background with black typography.
+
+Implement a complete application-wide theme system.
+
+Use centralized design tokens. Every component must respect the active theme.
+
+The design should feel like professional financial infrastructure rather than a generic SaaS dashboard.
+
+Use:
+- Precise typography.
+- Strong visual hierarchy.
+- Generous but controlled spacing.
+- Minimal borders.
+- Consistent table design.
+- Functional status indicators.
+- Clear numerical alignment.
+- Subtle interactions.
+- Excellent empty states.
+- Responsive layouts.
+
+Remove all logos, decorative brand marks, fake badges, unnecessary gradients and unnecessary visual clutter.
+
+FUNCTIONAL REQUIREMENTS:
+
+The complete platform must support:
+
+1. Vendor reconciliation.
+2. Invoice intake.
+3. Evidence upload and management.
+4. Contract-based pricing verification.
+5. Exact financial calculations.
+6. Discrepancy detection.
+7. Approval workflows.
+8. Separation of duties.
+9. Payment authorization.
+10. Payment withholding.
+11. Payment export.
+12. Cryptographic audit records.
+13. Hash-chain verification.
+14. Tamper detection.
+15. Vendor management.
+16. Contract management.
+17. User and role management.
+18. Integration management.
+19. Operational monitoring.
+20. Complete case lifecycle tracking.
+
+ARCHITECTURAL REQUIREMENTS:
+
+Maintain clear separation between:
+
+- Presentation layer.
+- API layer.
+- Business logic.
+- Financial calculation engine.
+- Evidence processing.
+- Authorization.
+- Approval orchestration.
+- Ledger persistence.
+- Integration adapters.
+
+The frontend must never be the authority for financial decisions.
+
+The backend must validate every sensitive operation.
+
+All financial calculations must use exact decimal arithmetic.
+
+All sensitive operations must be auditable.
+
+All approval operations must enforce actor identity, permissions, separation of duties and valid state transitions.
+
+All payment exports must be generated from authorized, verified data.
+
+All ledger verification failures must prevent unsafe downstream operations.
+
+DATA INTEGRITY:
+
+Use real persistent storage wherever the existing architecture supports it.
+
+Never use frontend constants as production data.
+
+Provide explicit distinctions between:
+- Real operational data.
+- Test fixtures.
+- Demonstration data.
+- Historical records.
+
+Demonstration data must never contaminate production records.
+
+COMPLETION STANDARD:
+
+The project is complete only when:
+
+- All primary workflows function end to end.
+- Existing working functionality is preserved.
+- All sensitive backend operations are protected.
+- No fabricated metrics remain.
+- All displayed data has a real source.
+- Theme switching works everywhere.
+- Existing automated tests pass.
+- New functionality has appropriate tests.
+- Security invariants are verified.
+- All documented limitations are honest.
+
+Do not stop after producing a design.
+
+Build the actual application.
+
+---
+
+## PROMPT 2 — Complete UI/UX Redesign
+
+This is where I would spend considerable attention.
+
+Redesign the complete Overcharge Desk frontend.
+
+REFERENCE DIRECTION:
+
+A sophisticated monochromatic financial operations interface.
+
+Think:
+- Professional financial terminals.
+- Swiss editorial design.
+- Minimal enterprise software.
+- Precision engineering.
+- Serious financial infrastructure.
+
+Do not copy another product's interface.
+
+GLOBAL VISUAL SYSTEM:
+
+Default background: #000000.
+Default primary text: #FFFFFF.
+Secondary text: #A0A0A0.
+Surface background: #080808.
+Borders: #252525.
+
+Create a complete reverse theme using white backgrounds and black typography.
+
+THEME ENGINE:
+
+Implement centralized CSS variables or the equivalent supported by the existing frontend framework.
+
+The theme switch must persist across sessions.
+
+It must affect:
+- Navigation.
+- Dashboard.
+- Tables.
+- Forms.
+- Modals.
+- Dropdowns.
+- Notifications.
+- Charts.
+- Tooltips.
+- Loading indicators.
+- Empty states.
+- Error states.
+
+Do not implement theme switching only on the dashboard.
+
+GLOBAL LAYOUT:
+
+Create a refined application shell.
+
+HEADER:
+- Product name: Overcharge Desk.
+- Current workspace.
+- Authenticated user.
+- Actual permission/role information.
+- Theme switch.
+- System health indicator.
+
+Do not display fake version numbers or decorative verification badges.
+
+SIDEBAR:
+
+Overview
+Reconciliation Cases
+New Intake
+Evidence
+Vendors
+Contracts
+Approvals
+Payment Control
+Audit Ledger
+Integrations
+System Health
+Settings
+
+Only show modules that actually exist and are implemented.
+
+DASHBOARD:
+
+Replace the current dashboard with an information-dense but readable operational overview.
+
+Sections:
+
+1. FINANCIAL POSITION
+
+Display actual:
+- Total invoice value.
+- Reconciled amount.
+- Discrepancy amount.
+- Amount withheld.
+- Amount approved for payment.
+- Pending approvals.
+
+2. RECONCILIATION ACTIVITY
+
+Display:
+- Recent cases.
+- Case identifiers.
+- Vendors.
+- Invoice values.
+- Detected variances.
+- Current status.
+- Last activity.
+
+3. ATTENTION REQUIRED
+
+Show:
+- Unresolved discrepancies.
+- Pending approvals.
+- Missing evidence.
+- Contract mismatches.
+- Failed verifications.
+- Blocked payment operations.
+
+4. AUDIT INTEGRITY
+
+Show actual:
+- Ledger verification status.
+- Number of verified records.
+- Last successful verification.
+- Detected integrity failures.
+- Latest ledger event.
+
+5. SYSTEM STATUS
+
+Display real service health and available integration status.
+
+Never substitute a static number for a real backend response.
+
+CASE MANAGEMENT:
+
+Create a professional case listing with:
+
+- Search.
+- Filters.
+- Sorting.
+- Pagination.
+- Vendor filtering.
+- Status filtering.
+- Date filtering.
+- Financial range filtering.
+
+Every row must open its actual case.
+
+CASE DETAILS:
+
+Create a comprehensive case workspace.
+
+Include:
+
+A. Case overview.
+B. Vendor details.
+C. Invoice details.
+D. Contract details.
+E. Expected financial amount.
+F. Actual invoiced amount.
+G. Variance calculations.
+H. Evidence documents.
+I. Verification results.
+J. Approval history.
+K. Payment status.
+L. Audit history.
+M. Available actions.
+
+Clearly distinguish calculated values from submitted values.
+
+FORMS:
+
+All forms must include:
+- Appropriate validation.
+- Clear required-field indicators.
+- Useful error messages.
+- Loading states.
+- Duplicate submission protection.
+- Successful completion feedback.
+
+INTERACTIONS:
+
+Every button must have a real action.
+
+Every dropdown must work.
+
+Every navigation item must open a functioning route.
+
+Every table action must operate on the correct record.
+
+Every modal must support correct validation and dismissal behaviour.
+
+RESPONSIVENESS:
+
+Support desktop, laptop, tablet and mobile.
+
+Do not simply shrink desktop layouts.
+
+Create suitable responsive navigation, tables and case workspaces.
+
+ACCESSIBILITY:
+
+Support keyboard navigation, visible focus states, appropriate contrast, semantic HTML and accessible labels.
+
+FINAL REQUIREMENT:
+
+Do not deliver isolated redesigned screens.
+
+Implement a consistent, complete interface across every existing and newly implemented application module.
+
+---
+
+## PROMPT 3 — Remove Hardcoding and Fake Functionality
+
+This is particularly important after seeing your screenshot.
+
+The biggest problem is that the interface currently presents several values as if they represent real operational activity.
+
+For example:
+- Six reconciled cases.
+- ₹6,000 withheld.
+- 28 ledger events.
+- 227 passed tests.
+- Six canonical benchmark cases.
+
+These must have legitimate sources.
+
+Perform a comprehensive hardcoding and data integrity audit of the entire Overcharge Desk repository.
+
+OBJECTIVE:
+
+Eliminate fabricated operational information and ensure that every displayed value is derived from a legitimate source.
+
+SEARCH THE ENTIRE REPOSITORY.
+
+Identify:
+
+1. Hardcoded financial amounts.
+2. Hardcoded vendor names.
+3. Hardcoded invoices.
+4. Hardcoded reconciliation cases.
+5. Hardcoded approval statuses.
+6. Hardcoded ledger events.
+7. Hardcoded user identities.
+8. Hardcoded roles.
+9. Hardcoded test counters.
+10. Hardcoded system health.
+11. Hardcoded integration statuses.
+12. Hardcoded verification results.
+13. Hardcoded timestamps.
+14. Fake success messages.
+15. Placeholder API responses.
+16. Mock database implementations.
+17. Demo-only frontend arrays.
+18. Unused constants.
+19. Dead code.
+20. Duplicate business logic.
+
+For every finding, identify:
+- File path.
+- Exact location.
+- Current behaviour.
+- Why it is problematic.
+- Correct source of truth.
+- Required correction.
+
+IMPORTANT DISTINCTION:
+
+Not every constant is bad.
+
+Configuration, enumerations, design tokens, validation rules and immutable business policies can legitimately be constants.
+
+Eliminate fabricated operational data, not legitimate configuration.
+
+DATA SOURCES:
+
+Financial metrics must be calculated from persisted records.
+
+Vendor details must come from vendor records.
+
+Contract information must come from actual contract records.
+
+Approval status must come from persisted workflow state.
+
+Ledger statistics must come from actual ledger records.
+
+System health must come from real health checks.
+
+Integration status must come from actual integration connectivity or explicitly reported configuration state.
+
+Test counts must never be presented as live production metrics.
+
+DEMO DATA:
+
+If demonstration fixtures are necessary, isolate them from production.
+
+Never silently load demonstration records into an operational environment.
+
+Provide an explicit demo environment indicator when applicable.
+
+ERROR HANDLING:
+
+If a backend service fails:
+- Show the affected metric as unavailable.
+- Display an understandable error.
+- Preserve previously retrieved data only when clearly marked stale.
+- Never substitute fabricated zero values.
+- Never report successful verification when verification failed.
+
+BACKEND VALIDATION:
+
+Verify that financial and approval operations are not dependent on frontend-supplied totals or status values.
+
+Recalculate sensitive financial values on the server.
+
+Validate all identifiers, amounts, states and permissions.
+
+DELIVERABLE:
+
+Produce a complete hardcoding audit.
+
+Fix every confirmed issue.
+
+Add regression tests.
+
+Verify that production screens cannot accidentally display fixture data.
+
+Do not claim completion until the repository has been searched and the relevant findings have been addressed.
+
+---
+
+## PROMPT 4 — Complete Workflow Engineering
+
+This is the most important part.
+
+A beautiful interface is useless if the financial workflow is unreliable.
+
+Engineer and verify the complete Overcharge Desk financial operations workflow.
+
+The objective is to make the application genuinely usable from invoice intake to final payment authorization and cryptographic audit verification.
+
+WORKFLOW 1: INVOICE INTAKE
+
+A user creates a reconciliation case.
+
+Collect:
+- Vendor.
+- Invoice identifier.
+- Invoice date.
+- Invoice amount.
+- Currency.
+- Contract reference.
+- Supporting evidence.
+
+Validate all fields.
+
+Detect duplicate invoices.
+
+Persist the case.
+
+Generate a unique case identifier.
+
+Record the creation event in the audit system.
+
+WORKFLOW 2: EVIDENCE MANAGEMENT
+
+Support evidence uploads.
+
+Store documents securely.
+
+Associate each document with its case.
+
+Record:
+- Original filename.
+- File type.
+- File size.
+- Uploading user.
+- Upload timestamp.
+- Cryptographic content hash.
+
+Validate file types and sizes.
+
+Prevent unauthorized access.
+
+Do not accept a filename or client-provided hash as proof of document integrity.
+
+WORKFLOW 3: CONTRACT VERIFICATION
+
+Retrieve the relevant vendor contract.
+
+Determine applicable:
+- Contractual rates.
+- Quantities.
+- Discounts.
+- Taxes.
+- Additional fees.
+- Effective dates.
+- Commercial terms.
+
+Calculate the expected amount using exact decimal arithmetic.
+
+Identify discrepancies between the contract and invoice.
+
+WORKFLOW 4: RECONCILIATION ENGINE
+
+Compare expected and invoiced values.
+
+Generate a structured result.
+
+Distinguish:
+- Exact match.
+- Overcharge.
+- Undercharge.
+- Missing contractual information.
+- Missing evidence.
+- Calculation failure.
+- Commercial review required.
+
+Never automatically approve an unresolved discrepancy.
+
+WORKFLOW 5: APPROVAL ENGINE
+
+Implement an explicit state machine.
+
+Possible states should be defined according to the existing domain model.
+
+Enforce:
+- Authenticated actors.
+- Role-based permissions.
+- Separation of duties.
+- Approval limits.
+- Valid state transitions.
+- Duplicate-action protection.
+- Audit logging.
+
+The person creating a case must not bypass required independent approval.
+
+The frontend must never decide whether an actor is authorized.
+
+WORKFLOW 6: PAYMENT CONTROL
+
+Allow payment authorization only when all required conditions are satisfied.
+
+Verify:
+- Reconciliation result.
+- Contractual compliance.
+- Evidence completeness.
+- Approval status.
+- Payment amount.
+- Vendor identity.
+- Ledger integrity.
+
+Generate payment exports only from authorized records.
+
+Prevent duplicate payment exports and unauthorized modifications.
+
+WORKFLOW 7: CRYPTOGRAPHIC AUDIT LEDGER
+
+Preserve the existing append-only ledger architecture.
+
+Verify:
+- Record sequence.
+- Previous-record hash.
+- Current-record hash.
+- Canonical serialization.
+- Event identity.
+- Tampering.
+- Missing records.
+- Duplicate records.
+- Unauthorized modifications.
+
+Any verification failure must produce a clearly visible failure state.
+
+Never silently repair or rewrite historical records.
+
+WORKFLOW 8: INTEGRATIONS
+
+Inspect existing Switch and Mattermost integration implementations.
+
+Preserve working integration logic.
+
+Verify:
+- Authentication.
+- Connection handling.
+- Message delivery.
+- Error handling.
+- Retries.
+- Duplicate notification protection.
+- Auditability.
+
+Clearly distinguish configured, connected, disconnected and failed states.
+
+Do not present an integration as operational merely because credentials exist.
+
+WORKFLOW 9: CASE HISTORY
+
+Every case must have a traceable history.
+
+Record:
+- Creation.
+- Evidence additions.
+- Reconciliation.
+- Changes.
+- Reviews.
+- Approvals.
+- Rejections.
+- Payment authorization.
+- Payment export.
+- Verification events.
+
+Make historical information accessible from the case workspace.
+
+FINAL REQUIREMENT:
+
+Demonstrate the complete workflow using isolated test fixtures.
+
+Verify both successful and unsuccessful paths.
+
+A failed workflow must remain safely failed.
+
+Never convert a failed financial operation into an apparent success.
+
+---
+
+## PROMPT 5 — Final Security, Testing and Production Audit
+
+Act as an independent security auditor and principal reliability engineer.
+
+Perform a forensic review of the completed Overcharge Desk repository.
+
+Do not assume previous development work is correct.
+
+Independently verify everything.
+
+SECURITY:
+
+Review:
+- Authentication.
+- Authorization.
+- Role enforcement.
+- Separation of duties.
+- Session management.
+- API access control.
+- Input validation.
+- File upload security.
+- Secret management.
+- Database permissions.
+- Injection vulnerabilities.
+- CSRF protection where applicable.
+- XSS protection.
+- Payment export integrity.
+- Audit log integrity.
+
+FINANCIAL CORRECTNESS:
+
+Test:
+- Decimal precision.
+- Rounding behaviour.
+- Currency handling.
+- Negative amounts.
+- Zero amounts.
+- Large values.
+- Duplicate invoices.
+- Partial reconciliation.
+- Contractual discrepancies.
+- Tax calculations.
+- Invalid input.
+- Overflow boundaries.
+
+LEDGER:
+
+Test:
+- Valid hash chains.
+- Tampered entries.
+- Missing entries.
+- Reordered entries.
+- Duplicate entries.
+- Invalid hashes.
+- Concurrent writes.
+- Database failures.
+- Recovery behaviour.
+
+WORKFLOW:
+
+Test every major case transition.
+
+Test unauthorized approval.
+
+Test self-approval attempts.
+
+Test duplicate approvals.
+
+Test invalid payment authorization.
+
+Test failed evidence verification.
+
+Test unavailable integrations.
+
+Test database failures.
+
+FRONTEND:
+
+Verify:
+- Every route.
+- Every button.
+- Every form.
+- Every filter.
+- Every table.
+- Every modal.
+- Every theme.
+- Every error state.
+- Every loading state.
+- Mobile responsiveness.
+
+AUTOMATION:
+
+Run the complete existing test suite.
+
+Add missing tests.
+
+Run linting, type checking and security checks supported by the project.
+
+Run integration tests.
+
+Run end-to-end tests.
+
+Do not fabricate test counts or claim that tests passed without execution.
+
+REPOSITORY HYGIENE:
+
+Remove:
+- Dead code.
+- Duplicate implementations.
+- Unused dependencies.
+- Abandoned components.
+- Debugging statements.
+- Exposed secrets.
+- Temporary files.
+- Unnecessary generated artifacts.
+
+DOCUMENTATION:
+
+Update:
+- README.
+- Architecture documentation.
+- Installation instructions.
+- Environment variables.
+- Database setup.
+- Integration setup.
+- API documentation.
+- Testing instructions.
+- Production deployment instructions.
+
+FINAL REPORT:
+
+Produce:
+
+1. Original issues discovered.
+2. Issues corrected.
+3. Files created.
+4. Files modified.
+5. Files removed.
+6. Security findings.
+7. Test results.
+8. Remaining limitations.
+9. Deployment requirements.
+10. Production readiness assessment.
+
+Do not describe the system as production-ready if critical issues remain.
+
+The goal is verifiable reliability, not an impressive-looking completion report.
+
+---
+
+# 3. My additional recommendations
+
+There are five things I would particularly insist on implementing.
+
+### 1. A proper financial case workspace
+
+This should become the heart of Overcharge Desk.
+
+Instead of users jumping between multiple disconnected screens, each case should have one comprehensive workspace containing the invoice, contract, evidence, calculations, approvals, payment status and audit history.
+
+### 2. A real financial control engine
+
+Don't make the product just another invoice comparison tool.
+
+Its actual value should be:
+
+**Invoice → Contract → Evidence → Reconciliation → Independent Approval → Payment Authorization → Cryptographic Audit.**
+
+Each stage must enforce the conditions of the next.
+
+### 3. An actual integrity verification interface
+
+The ledger should have its own dedicated screen.
+
+Show:
+- Verification status.
+- Verified record count.
+- Last verification.
+- Chain continuity.
+- Failed verification events.
+- Individual record inspection.
+- Record hashes.
+- Previous-record references.
+
+Make it possible to inspect why something failed.
+
+### 4. A complete permission system
+
+Don't rely on a dropdown where someone can select Business Owner, Finance Manager or Approver.
+
+Those roles must be attached to authenticated identities and enforced server-side.
+
+The UI should reflect actual permissions.
+
+### 5. An exceptional empty-state experience
+
+When a business first signs up, there might be no vendors, invoices, contracts or reconciliations.
+
+The application should still feel complete.
+
+Give users clear onboarding actions, contextual explanations and useful setup guidance.
+
+Never fill an empty production dashboard with invented transactions.
+
+---
+
+# 4. The order in which I would execute everything
+
+I strongly recommend this sequence:
+
+| Order | Prompt | Priority |
+|---|---|---|
+| 1 | Master Product Transformation | Critical |
+| 2 | Hardcoding Elimination Audit | Critical |
+| 3 | Financial Workflow Engineering | Critical |
+| 4 | Complete UI/UX Redesign | High |
+| 5 | Security and Production Audit | Critical |
+
+**One important instruction:** Do not let the coding agent implement all five simultaneously. Have it inspect the repository first, finish each phase, run the relevant tests and only then proceed.
+
+The frontend must be built around the actual backend capabilities, not the other way around.
+
+---
+
+## My final vision for Overcharge Desk
+
+I would position it as:
+
+**Overcharge Desk — Financial Control Infrastructure.**
+
+Not an invoice dashboard. Not an accounting clone.
+
+A system that independently verifies what a business owes, establishes why it owes that amount, controls who can authorize payment, preserves the evidence and makes financial manipulation detectable.
+
+The interface should be almost aggressively minimal.
+
+Black. White. Numbers. Evidence. Decisions. Accountability.
+
+**The product should look simple because the engineering underneath it is doing the difficult work.**
+
+That's the direction I'd take.

@@ -32,6 +32,20 @@
       ]
     },
     {
+      "actor_id": "approver",
+      "display_name": "Vikram Seth (Senior Approver)",
+      "role": "APPROVER",
+      "authentication_method": "hmac_sha256_token",
+      "active": true,
+      "permissions": [
+        "view_cases",
+        "approve_case",
+        "reject_case",
+        "view_approvals",
+        "record_ledger"
+      ]
+    },
+    {
       "actor_id": "reviewer",
       "display_name": "Commercial Invoice Reviewer",
       "role": "REVIEWER",
