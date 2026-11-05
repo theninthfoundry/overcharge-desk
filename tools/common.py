@@ -205,6 +205,7 @@ def save_comparison_with_digest(result: dict, json_path: Path | str) -> str:
 
 
 def verify_comparison_digest_file(json_path: Path | str, digest_path: Path | str | None = None) -> tuple[bool, str, str]:
+    # Cryptographic Verification: Compare on-disk comparison JSON against canonical .sha256 companion
     """Verify that a comparison result matches its recorded .sha256 companion file.
     
     Returns: (is_valid, calculated_digest, recorded_digest)
