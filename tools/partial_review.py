@@ -34,6 +34,7 @@ def safe_text(value) -> str:
 
 
 def build_partial_review_rows(result: dict) -> tuple[list[list[str]], dict]:
+    # Tier 2 Artifact: Investigation review report for unresolved or uncontracted line items
     """Build partial review CSV rows from a REVIEW_REQUIRED comparison result."""
     issues = validate_comparison(result)
     if issues:
