@@ -202,7 +202,13 @@ class CaseService:
         reason: Optional[str] = None,
         amount: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Process human approval or rejection via gateway with policy checks."""
+        """Process human approval or rejection via gateway with policy checks.
+        
+        Security Invariants:
+        - Server Calculation Authority: The payable amount is independently computed from compare.json.
+        - Separation of Duties: Approver username cannot match case creator username.
+        - Positive Allowlist: Only cases in status VERIFIED may be approved.
+        """
         c_dir = self._resolve_case_dir(case_id)
         if not c_dir or not c_dir.exists():
             raise ToolError(f"Case '{case_id}' not found", 2)
