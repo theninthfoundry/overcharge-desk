@@ -1,4 +1,11 @@
-"""Password hashing and verification using Argon2id."""
+"""Password hashing and verification using Argon2id.
+
+Security Invariants:
+1. Primary Hasher: Argon2id (64MB memory cost, 3 iterations, 4 parallelism threads).
+2. Fallback Hasher: PBKDF2-HMAC-SHA256 (600,000 iterations per OWASP recommendations).
+3. Bounds Checking: String length between 8 and 1024 characters to prevent CPU-exhaustion DoS.
+4. Constant-Time Verification: Mitigates timing side-channel attacks across both backends.
+"""
 from __future__ import annotations
 
 import hmac
@@ -99,3 +106,4 @@ def needs_rehash(password_hash: str) -> bool:
         return False
     # Any non-argon2 hash should be rehashed to Argon2id
     return True
+
