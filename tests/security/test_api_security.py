@@ -27,6 +27,17 @@ def test_security_headers_present():
     assert len(headers["X-Request-ID"]) > 0
 
 
+def test_security_headers_on_404_response():
+    """Verify security headers are still emitted on 404 Not Found responses."""
+    res = client.get("/api/v1/non_existent_endpoint_xyz")
+    assert res.status_code == 404
+    assert res.headers.get("X-Content-Type-Options") == "nosniff"
+    assert res.headers.get("X-Frame-Options") == "DENY"
+    assert "default-src 'self'" in res.headers.get("Content-Security-Policy", "")
+    assert "X-Request-ID" in res.headers
+
+
+
 def test_login_brute_force_lockout():
     """Verify account is locked out after consecutive failed login attempts."""
     test_user = f"brute_{uuid.uuid4().hex[:8]}"
