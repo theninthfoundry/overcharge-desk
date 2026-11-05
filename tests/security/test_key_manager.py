@@ -55,3 +55,24 @@ def test_production_fails_closed_when_key_missing(tmp_path):
     # In production, missing manifest/key causes immediate failure
     with pytest.raises(ToolError, match="Production signing key manifest missing"):
         KeyManager(config_dir=tmp_path, app_env="production")
+
+
+def test_multiple_sequential_key_rotations(tmp_path):
+    """Verify multiple successive key rotations preserve all historical keys."""
+    km = KeyManager(config_dir=tmp_path, app_env="development")
+    keys_history = []
+    
+    for i in range(3):
+        kid, kbytes = km.get_active_key()
+        keys_history.append((kid, kbytes))
+        km.rotate_key(new_key_id=f"key-seq-{i+1}")
+
+    # The current key is the 3rd rotated key
+    curr_id, _ = km.get_active_key()
+    assert curr_id == "key-seq-3"
+
+    # All prior keys must still be loadable by id
+    for kid, kbytes in keys_history:
+        assert km.get_key_by_id(kid) == kbytes
+
+
