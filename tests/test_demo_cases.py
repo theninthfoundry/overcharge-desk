@@ -14,6 +14,7 @@ from run_demo_suite import run_full_demo
 
 
 def test_four_demo_cases_end_to_end(tmp_path):
+    # Continuous Integration: Executes all four benchmark demo cases in an isolated workspace
     # Copy repo's cases/demo-* into tmp_path
     cases_src = Path("cases")
     cases_tmp = tmp_path / "cases"
