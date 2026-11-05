@@ -132,6 +132,7 @@ def test_scenario_04_exact_contract_match(vendor, mk):
 # 5. Written Line Total Differs from Qty x Price (FAIL-CLOSED)
 # ---------------------------------------------------------------------------
 def test_scenario_05_written_line_total_differs_from_qty_times_price(vendor, mk):
+    # Adversarial Scenario 5: Verifies that written line total discrepancy causes BLOCKED
     make_invoice, carton, _ = mk
     # 500 x 112 = 56,000, but written as 57,000
     inv = make_invoice([carton(500, "112.00", total="57000.00")])
