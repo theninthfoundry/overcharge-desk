@@ -1,12 +1,18 @@
 PY ?= python3
 
-.PHONY: test reset-demo check demo verify-ledger
+.PHONY: test reset-demo check demo verify-ledger quickstart simulate
 
 test:
 	$(PY) -m pytest -v
 
 check: test
 	@echo "Tools OK. Now run the Day-1 checks in DEMO_SCRIPT.md."
+
+quickstart:
+	$(PY) tools/quickstart.py
+
+simulate:
+	$(PY) tools/simulate_switch.py
 
 demo:
 	$(PY) tools/run_demo_suite.py --clean
