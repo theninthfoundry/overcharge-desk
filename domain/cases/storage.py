@@ -64,7 +64,12 @@ class CaseStorage:
         return clean_id
 
     def get_case_directory(self, case_id: str, create: bool = True) -> Path:
-        """Get canonical validated case directory within storage root."""
+        """Get canonical validated case directory within storage root.
+        
+        Security Boundary:
+        - Resolves absolute real path and asserts relative_to(self.cases_dir).
+        - Prevents directory escape through symlinks or alternate path encodings.
+        """
         clean_id = self.validate_case_id(case_id)
         c_dir = (self.cases_dir / clean_id).resolve()
 
