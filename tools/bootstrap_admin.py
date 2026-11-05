@@ -79,6 +79,7 @@ def bootstrap_admin(
         # Explicit development-only demo seed
         # Demo accounts are strictly isolated and flagged is_demo=True to block production startup
         demo_specs = [
+            ("owner", "owner@overcharge-desk.local", "Business Financial Owner", SystemRole.APPROVER, "owner123"),
             ("operator", "sanya.m@overcharge-desk.local", "Sanya Malhotra (Finance Ops)", SystemRole.FINANCE_OPERATOR, "operator123"),
             ("reviewer", "rohan.v@overcharge-desk.local", "Rohan Verma (Reviewer)", SystemRole.REVIEWER, "reviewer123"),
             ("approver", "vikram.seth@overcharge-desk.local", "Vikram Seth (Approver)", SystemRole.APPROVER, "approver123"),
