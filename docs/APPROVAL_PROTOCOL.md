@@ -112,3 +112,7 @@ flowchart TD
 
 1. **Shared Secret Trust Boundary**: HMAC-SHA-256 provides authenticity and integrity under the assumption that the provisioned secret key (`config/signing.key`) is protected. It does not provide non-repudiation against administrators possessing the key.
 2. **Replay & Cross-Case Prevention**: Receipts are bound to specific `case_id` and unique timestamp-derived `receipt_id`. Attempting to use a receipt from Case A for Case B immediately fails verification.
+
+
+
+<!-- Invariant Note: Full 64-char SHA256 hex digests required across all approval receipts -->
