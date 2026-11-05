@@ -9,8 +9,10 @@ from typing import List, Optional, Set
 from common import ToolError, canonical_json_bytes, load_json, write_json_atomic
 
 CASE_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]{3,64}$")
-MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB limit
+# Storage resource boundaries
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB strict read boundary to prevent disk exhaustion DoS
 
+# Closed registry of permitted case artifacts. Any request for unregistered files is refused fail-closed.
 ALLOWED_ARTIFACT_NAMES: Set[str] = {
     "invoice.json",
     "case.json",
