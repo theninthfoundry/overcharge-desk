@@ -96,4 +96,12 @@ def test_hmac_signing_with_historical_key(tmp_path):
     assert hmac.compare_digest(sig, verified_sig) is True
 
 
+def test_revoke_non_existent_key_raises_error(tmp_path):
+    """Revoking an unlisted key ID raises ToolError."""
+    km = KeyManager(config_dir=tmp_path, app_env="development")
+    with pytest.raises(ToolError, match="not found in manifest"):
+        km.revoke_key("key-phantom-999", reason="Not real")
+
+
+
 
