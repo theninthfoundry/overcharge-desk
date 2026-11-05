@@ -1,0 +1,712 @@
+#!/usr/bin/env python3
+"""Unified Agent Command-Line Interface for Overcharge Desk (tools/desk.py).
+
+Provides the deterministic financial and evidence operations for AI agents
+operating inside Switch / Mattermost collaborative workflows.
+
+Subcommands:
+    intake    - Intake raw invoice and contract evidence, register source SHA-256 fingerprints.
+    audit     - Run deterministic contract comparison, independent verification, and pre-approval preview.
+    status    - Query 4-dimensional case status, line totals, and blocking discrepancies.
+    history   - Inspect audit ledger event chain for a case, or query vendor history across all cases.
+    finalize  - Verify cryptographic human approval receipt and release authorized corrected payment sheet.
+
+Design Invariants:
+    1. No Agent Approval: Financial authorization requires human owner execution via tools/approve.py.
+       The 'approve' subcommand is strictly omitted from desk.py.
+    2. Exact Decimal Math: Uses decimal.Decimal and half-up rounding (ROUND_HALF_UP).
+    3. Deterministic Outputs: All commands print structured JSON to stdout and exit non-zero on failure.
+    4. Non-Interactive: Never prompts on stdin.
+
+Usage:
+    python tools/desk.py intake INVOICE_FILE CONTRACT_FILE [--case-id ID] [--cases-dir DIR]
+    python tools/desk.py audit CASE_ID [--cases-dir DIR]
+    python tools/desk.py status CASE_ID [--cases-dir DIR]
+    python tools/desk.py history [CASE_ID] [--vendor VENDOR_ID] [--ledger-db DB]
+    python tools/desk.py finalize CASE_ID [--cases-dir DIR]
+"""
+from __future__ import annotations
+
+import argparse
+import datetime
+import json
+import os
+import shutil
+import sys
+from decimal import Decimal
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+# Ensure tools directory is in sys.path
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = SCRIPT_DIR.parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from common import (STATE_BLOCKED, STATE_REVIEW_REQUIRED, STATE_VERIFIED,
+                    ToolError, canonical_json_bytes, emit, load_json, money_str,
+                    run_cli, sha256_file, to_decimal, utc_now_iso, write_json_atomic)
+from check_invoice import find_issues
+from compare import compare
+from evidence import get_evidence_digest_map, load_registry, register_evidence, verify_evidence
+from audit_ledger import DEFAULT_LEDGER_DB, list_events
+from approval_receipt import verify_approval_receipt
+from auth import ensure_signing_key, get_default_key_path, load_signing_key
+from pipeline import run_pipeline
+
+
+def _get_ledger_head(db_path: Path | str) -> str:
+    """Return the SHA-256 hash of the latest event in the audit ledger."""
+    p = Path(db_path)
+    if not p.exists():
+        return "0" * 64
+    try:
+        events = list_events(db_path=p)
+        if events:
+            return events[-1].get("event_hash", "0" * 64)
+    except Exception:
+        pass
+    return "0" * 64
+
+
+def _resolve_case_path(case_arg: str, cases_dir: Path) -> Path:
+    """Resolve case directory path."""
+    p = Path(case_arg)
+    if p.is_dir():
+        return p.resolve()
+    candidate = cases_dir / case_arg
+    if candidate.is_dir():
+        return candidate.resolve()
+    # If case_arg is an ID without existing dir, return expected path
+    return candidate.resolve()
+
+
+# -----------------------------------------------------------------------------
+# Subcommand: intake
+# -----------------------------------------------------------------------------
+def run_intake(
+    invoice_path: Path | str,
+    contract_path: Path | str,
+    case_id: Optional[str] = None,
+    cases_dir: Path | str = "cases",
+    base_dir: Path | str = ".",
+) -> dict:
+    """Intake raw invoice and contract evidence into a new or existing case folder."""
+    root = Path(base_dir).resolve()
+    inv_p = Path(invoice_path)
+    if not inv_p.is_absolute():
+        inv_p = root / inv_p
+    con_p = Path(contract_path)
+    if not con_p.is_absolute():
+        con_p = root / con_p
+
+    if not inv_p.exists():
+        raise ToolError(f"Invoice source file not found: {inv_p}", 2)
+    if not con_p.exists():
+        raise ToolError(f"Contract source file not found: {con_p}", 2)
+
+    c_base = Path(cases_dir)
+    if not c_base.is_absolute():
+        c_base = root / c_base
+
+    # Generate or parse case_id
+    assigned_id = case_id
+    inv_data = None
+    if inv_p.suffix.lower() == ".json":
+        try:
+            inv_data = load_json(inv_p)
+            if not assigned_id:
+                assigned_id = inv_data.get("case_id")
+        except Exception:
+            pass
+
+    if not assigned_id:
+        # Generate canonical daily case id: OC-YYYYMMDD-NN
+        today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
+        from next_case_id import next_id
+        assigned_id = next_id(c_base, today)
+
+    case_dir = c_base / assigned_id
+    case_dir.mkdir(parents=True, exist_ok=True)
+
+    # Compute source digests
+    inv_sha = sha256_file(inv_p)
+    con_sha = sha256_file(con_p)
+
+    # Copy files into case directory if not already there
+    dest_inv = case_dir / inv_p.name
+    if dest_inv.resolve() != inv_p.resolve():
+        shutil.copy2(inv_p, dest_inv)
+
+    dest_con = case_dir / con_p.name
+    if dest_con.resolve() != con_p.resolve():
+        shutil.copy2(con_p, dest_con)
+
+    # If input is json, also write/verify invoice.json in case root
+    canonical_inv = case_dir / "invoice.json"
+    if inv_data is not None:
+        inv_data["case_id"] = assigned_id
+        if "source_sha256" not in inv_data or not inv_data["source_sha256"]:
+            inv_data["source_sha256"] = inv_sha
+        write_json_atomic(canonical_inv, inv_data)
+
+    # Register evidence in tamper-evident registry
+    reg1 = register_evidence(
+        case_dir=case_dir,
+        file_path=dest_inv,
+        evidence_type="source_invoice",
+        case_id=assigned_id,
+        description=f"Source invoice from {inv_p.name}",
+    )
+    reg2 = register_evidence(
+        case_dir=case_dir,
+        file_path=dest_con,
+        evidence_type="vendor_contract",
+        case_id=assigned_id,
+        description=f"Vendor contract from {con_p.name}",
+    )
+
+    return {
+        "ok": True,
+        "case_id": assigned_id,
+        "case_dir": str(case_dir),
+        "invoice_file": str(dest_inv),
+        "contract_file": str(dest_con),
+        "source_sha256": inv_sha,
+        "contract_sha256": con_sha,
+        "evidence_registered": [reg1["evidence_id"], reg2["evidence_id"]],
+        "status": "INTAKE_COMPLETED",
+    }
+
+
+# -----------------------------------------------------------------------------
+# Subcommand: audit
+# -----------------------------------------------------------------------------
+def run_audit(
+    case_arg: str,
+    cases_dir: Path | str = "cases",
+    base_dir: Path | str = ".",
+    ledger_db: Optional[Path | str] = None,
+) -> dict:
+    """Execute deterministic comparison, independent verification, and emit pre-approval preview."""
+    root = Path(base_dir).resolve()
+    c_base = Path(cases_dir) if Path(cases_dir).is_absolute() else root / cases_dir
+    case_dir = _resolve_case_path(case_arg, c_base)
+
+    if not case_dir.exists():
+        raise ToolError(f"Case directory not found: {case_dir}", 2)
+
+    inv_file = case_dir / "invoice.json"
+    if not inv_file.exists():
+        raise ToolError(f"invoice.json not found in case directory: {case_dir}", 2)
+
+    inv_data = load_json(inv_file)
+    case_id = inv_data.get("case_id", case_dir.name)
+    vendor_id = inv_data.get("vendor_id", "acme")
+
+    # Locate contract/vendor seed file
+    vendor_file = root / "vendors" / f"{vendor_id}.json"
+    if not vendor_file.exists():
+        vendor_file = root / "seed" / f"{vendor_id}.json"
+    if not vendor_file.exists():
+        # Check inside case_dir for any json contract
+        cand = list(case_dir.glob("*.json"))
+        for c in cand:
+            if c.name != "invoice.json" and c.name != "evidence_registry.json":
+                vendor_file = c
+                break
+
+    if not vendor_file.exists():
+        raise ToolError(f"Contract file for vendor '{vendor_id}' not found", 3)
+
+    db_path = Path(ledger_db) if ledger_db else root / "ledger.db"
+
+    # Execute deterministic pipeline pass 1 (Pre-approval preview mode)
+    pipeline_res = run_pipeline(
+        invoice_path=inv_file,
+        vendor_path=vendor_file,
+        out_dir=case_dir,
+        base_dir=root,
+        require_approval=False,
+        ledger_db=db_path,
+        record_ledger_events=True,
+    )
+
+    v_status = pipeline_res.get("verification_status")
+    comm_status = pipeline_res.get("commercial_status")
+    totals = pipeline_res.get("totals", {})
+
+    # Extract cryptographic hashes
+    comp_json = case_dir / "compare.json"
+    comp_sha = sha256_file(comp_json) if comp_json.exists() else "0" * 64
+    inv_sha = inv_data.get("source_sha256") or sha256_file(inv_file)
+
+    vrf_json = case_dir / "audit" / "verification.json"
+    vrf_id = "UNKNOWN"
+    if vrf_json.exists():
+        try:
+            vrf_data = load_json(vrf_json)
+            vrf_id = vrf_data.get("verification_id", "UNKNOWN")
+        except Exception:
+            pass
+
+    ledger_head = _get_ledger_head(db_path)
+
+    lines = inv_data.get("lines", [])
+    summary = pipeline_res.get("artifact_summary", {})
+    comp_json_data = load_json(comp_json) if comp_json.exists() else {}
+    comp_totals = comp_json_data.get("totals", {})
+
+    payable_str = summary.get("payable_total") or money_str(to_decimal(comp_totals.get("per_contract_total", comp_totals.get("matched_per_contract", "0"))))
+    withheld_str = summary.get("withheld_total") or money_str(to_decimal(comp_totals.get("variance_on_matched_lines", "0")))
+
+    result = {
+        "ok": v_status == STATE_VERIFIED,
+        "case_id": case_id,
+        "verification_status": v_status,
+        "commercial_status": comm_status,
+        "invoice_sha256": inv_sha,
+        "compare_sha256": comp_sha,
+        "verification_id": vrf_id,
+        "ledger_head": ledger_head,
+        "payable_goods_subtotal": payable_str,
+        "withheld_goods_variance": withheld_str,
+        "lines_total_count": len(lines),
+        "source_discrepancy_count": totals.get("source_discrepancy_count", 0),
+        "preview_file": str(case_dir / pipeline_res.get("artifact_file", "payment_preview.csv")),
+        "blocking_issues": pipeline_res.get("blocking_issues", []),
+    }
+
+    if v_status != STATE_VERIFIED:
+        # Exit code 2 per specification on blocked/discrepant verification
+        emit(result)
+        sys.exit(2)
+
+    return result
+
+
+# -----------------------------------------------------------------------------
+# Subcommand: status
+# -----------------------------------------------------------------------------
+def run_status(
+    case_arg: str,
+    cases_dir: Path | str = "cases",
+    base_dir: Path | str = ".",
+) -> dict:
+    """Retrieve 4-dimensional state model, financial totals, and artifact inventory."""
+    root = Path(base_dir).resolve()
+    c_base = Path(cases_dir) if Path(cases_dir).is_absolute() else root / cases_dir
+    case_dir = _resolve_case_path(case_arg, c_base)
+
+    if not case_dir.exists():
+        raise ToolError(f"Case directory not found: {case_dir}", 2)
+
+    comp_file = case_dir / "comparison" / "compare.json"
+    if not comp_file.exists():
+        comp_file = case_dir / "compare.json"
+
+    if not comp_file.exists():
+        # Case has been intaken but not yet audited
+        inv_file = case_dir / "invoice.json"
+        if not inv_file.exists():
+            raise ToolError(f"Missing invoice.json in case directory: {case_dir}", 2)
+        inv_data = load_json(inv_file)
+        return {
+            "ok": True,
+            "case_id": inv_data.get("case_id", case_dir.name),
+            "verification_status": "UNVERIFIED",
+            "commercial_status": "PENDING_AUDIT",
+            "approval_status": "NONE",
+            "payment_status": "PENDING_AUDIT",
+            "invoiced_total": str(inv_data.get("stated_total", "0.00")),
+            "payable_amount": "0.00",
+            "withheld_amount": "0.00",
+            "blocking_issues": [],
+        }
+
+    comp_data = load_json(comp_file)
+    case_id = comp_data.get("case_id", case_dir.name)
+    v_status = comp_data.get("verification_status", "UNVERIFIED")
+    comm_status = comp_data.get("commercial_status", "UNKNOWN")
+    totals = comp_data.get("totals", {})
+
+    # Check approval status
+    receipt_file = case_dir / "approvals" / "approval_receipt.json"
+    if not receipt_file.exists():
+        receipt_file = case_dir / "approval_receipt.json"
+
+    approval_status = "NONE"
+    receipt_data = None
+    if receipt_file.exists():
+        try:
+            receipt_data = load_json(receipt_file)
+            approval_status = receipt_data.get("decision", "PENDING")
+        except Exception:
+            approval_status = "RECEIPT_INVALID"
+
+    # Check payment recommendation status
+    corrected_sheet = case_dir / "corrected_payment.csv"
+    preview_sheet = case_dir / "payment_preview.csv"
+    blocked_sheet = case_dir / "blocked_review_report.csv"
+
+    if corrected_sheet.exists() and approval_status == "APPROVED":
+        payment_status = "AUTHORIZED"
+    elif approval_status == "APPROVED":
+        payment_status = "APPROVED_PENDING_RELEASE"
+    elif v_status == STATE_BLOCKED or blocked_sheet.exists():
+        payment_status = "BLOCKED"
+    elif preview_sheet.exists():
+        payment_status = "PREVIEW_ONLY"
+    else:
+        payment_status = "PENDING_ACTION"
+
+    payable_str = money_str(to_decimal(totals.get("per_contract_total", totals.get("matched_per_contract", "0"))))
+    withheld_str = money_str(to_decimal(totals.get("variance_on_matched_lines", "0")))
+    invoiced_str = money_str(to_decimal(totals.get("invoiced_total", totals.get("stated_total_as_written", "0"))))
+
+    return {
+        "ok": True,
+        "case_id": case_id,
+        "verification_status": v_status,
+        "commercial_status": comm_status,
+        "approval_status": approval_status,
+        "payment_status": payment_status,
+        "invoiced_total": invoiced_str,
+        "payable_amount": payable_str,
+        "withheld_amount": withheld_str,
+        "taxes_and_freight_unverified": comp_data.get("taxes_and_freight_unverified", True),
+        "blocking_issues": comp_data.get("blocking_issues", []),
+        "receipt_id": receipt_data.get("receipt_id") if receipt_data else None,
+        "receipt_hash": receipt_data.get("receipt_hash") if receipt_data else None,
+    }
+
+
+# -----------------------------------------------------------------------------
+# Subcommand: history
+# -----------------------------------------------------------------------------
+def run_history(
+    case_arg: Optional[str] = None,
+    vendor_id: Optional[str] = None,
+    cases_dir: Path | str = "cases",
+    base_dir: Path | str = ".",
+    ledger_db: Optional[Path | str] = None,
+) -> dict:
+    """Query case audit trail or retrieve vendor case history across the entire ledger."""
+    root = Path(base_dir).resolve()
+    db_path = Path(ledger_db) if ledger_db else root / "ledger.db"
+    c_base = Path(cases_dir) if Path(cases_dir).is_absolute() else root / cases_dir
+
+    if vendor_id:
+        # Vendor Memory Mode: Query all prior cases, overcharges, and outcomes for this vendor
+        target_vendor = vendor_id.lower().strip()
+        prior_cases = []
+        total_withheld = Decimal("0.00")
+
+        # Scan cases directory
+        if c_base.exists():
+            for c_dir in sorted(c_base.iterdir()):
+                if not c_dir.is_dir():
+                    continue
+                inv_p = c_dir / "invoice.json"
+                if not inv_p.exists():
+                    continue
+                try:
+                    inv_d = load_json(inv_p)
+                except Exception:
+                    continue
+
+                v_id = inv_d.get("vendor_id", "")
+                v_name = inv_d.get("vendor_name_as_written", "")
+                if target_vendor not in v_id.lower() and target_vendor not in v_name.lower():
+                    continue
+
+                cid = inv_d.get("case_id", c_dir.name)
+                inv_num = inv_d.get("invoice_number", "UNKNOWN")
+                inv_date = inv_d.get("invoice_date", "UNKNOWN")
+
+                # Read compare and approval results
+                comp_p = c_dir / "compare.json"
+                c_status = "UNKNOWN"
+                v_status = "UNVERIFIED"
+                invoiced_amt = "0.00"
+                payable_amt = "0.00"
+                withheld_amt = "0.00"
+
+                if comp_p.exists():
+                    try:
+                        cd = load_json(comp_p)
+                        v_status = cd.get("verification_status", "UNKNOWN")
+                        c_status = cd.get("commercial_status", "UNKNOWN")
+                        t = cd.get("totals", {})
+                        invoiced_amt = money_str(to_decimal(t.get("invoiced_total", "0")))
+                        payable_amt = money_str(to_decimal(t.get("per_contract_total", "0")))
+                        w_dec = to_decimal(t.get("variance_on_matched_lines", "0"))
+                        withheld_amt = money_str(w_dec)
+                        total_withheld += w_dec
+                    except Exception:
+                        pass
+
+                # Check approval receipt
+                app_receipt = c_dir / "approvals" / "approval_receipt.json"
+                outcome = "PENDING_AUDIT"
+                if app_receipt.exists():
+                    try:
+                        rd = load_json(app_receipt)
+                        outcome = rd.get("decision", "APPROVED")
+                    except Exception:
+                        outcome = "APPROVED"
+                elif v_status == STATE_BLOCKED:
+                    outcome = "BLOCKED"
+                elif v_status == STATE_VERIFIED:
+                    outcome = "AWAITING_APPROVAL"
+
+                prior_cases.append({
+                    "case_id": cid,
+                    "invoice_number": inv_num,
+                    "invoice_date": inv_date,
+                    "verification_status": v_status,
+                    "commercial_status": c_status,
+                    "outcome": outcome,
+                    "invoiced_amount": invoiced_amt,
+                    "payable_amount": payable_amt,
+                    "withheld_amount": withheld_amt,
+                })
+
+        return {
+            "ok": True,
+            "vendor_id": target_vendor,
+            "prior_cases_count": len(prior_cases),
+            "prior_cases": prior_cases,
+            "total_overcharges_withheld": money_str(total_withheld),
+        }
+
+    elif case_arg:
+        # Single Case Ledger History Mode
+        case_dir = _resolve_case_path(case_arg, c_base)
+        target_case_id = case_dir.name
+        inv_p = case_dir / "invoice.json"
+        if inv_p.exists():
+            try:
+                target_case_id = load_json(inv_p).get("case_id", target_case_id)
+            except Exception:
+                pass
+
+        events = list_events(case_id=target_case_id, db_path=db_path) if db_path.exists() else []
+        return {
+            "ok": True,
+            "case_id": target_case_id,
+            "events_count": len(events),
+            "events": events,
+        }
+
+    else:
+        # Full ledger overview
+        events = list_events(db_path=db_path) if db_path.exists() else []
+        return {
+            "ok": True,
+            "total_ledger_events": len(events),
+            "recent_events": events[-20:],
+        }
+
+
+# -----------------------------------------------------------------------------
+# Subcommand: finalize
+# -----------------------------------------------------------------------------
+def run_finalize(
+    case_arg: str,
+    cases_dir: Path | str = "cases",
+    base_dir: Path | str = ".",
+    signing_key_file: Optional[Path | str] = None,
+    ledger_db: Optional[Path | str] = None,
+) -> dict:
+    """Verify cryptographic human approval receipt and release authorized payment sheet."""
+    root = Path(base_dir).resolve()
+    c_base = Path(cases_dir) if Path(cases_dir).is_absolute() else root / cases_dir
+    case_dir = _resolve_case_path(case_arg, c_base)
+
+    if not case_dir.exists():
+        raise ToolError(f"Case directory not found: {case_dir}", 2)
+
+    inv_file = case_dir / "invoice.json"
+    if not inv_file.exists():
+        raise ToolError(f"invoice.json not found in case directory: {case_dir}", 2)
+
+    inv_data = load_json(inv_file)
+    case_id = inv_data.get("case_id", case_dir.name)
+    vendor_id = inv_data.get("vendor_id", "acme")
+
+    vendor_file = root / "vendors" / f"{vendor_id}.json"
+    if not vendor_file.exists():
+        vendor_file = root / "seed" / f"{vendor_id}.json"
+    if not vendor_file.exists():
+        raise ToolError(f"Contract file for vendor '{vendor_id}' not found", 3)
+
+    # 1. Require signed approval receipt: Fail-closed if absent
+    receipt_p = case_dir / "approvals" / "approval_receipt.json"
+    if not receipt_p.exists():
+        receipt_p = case_dir / "approval_receipt.json"
+
+    if not receipt_p.exists():
+        raise ToolError(
+            f"Finalization refused: No signed human approval receipt found for case '{case_id}'. "
+            "Human authorization via tools/approve.py is mandatory before payment release.",
+            4,
+        )
+
+    # 2. Cryptographic verification of approval receipt
+    receipt_data = load_json(receipt_p)
+    key_path = Path(signing_key_file) if signing_key_file else get_default_key_path()
+    key_bytes = ensure_signing_key(key_path)
+
+    app_valid, app_issues = verify_approval_receipt(
+        receipt_data,
+        key_bytes,
+        expected_case_id=case_id,
+    )
+    if not app_valid:
+        raise ToolError(
+            f"Finalization refused: Approval receipt cryptographic verification failed: {'; '.join(app_issues)}",
+            4,
+        )
+
+    if receipt_data.get("decision") != "APPROVED":
+        raise ToolError(
+            f"Finalization refused: Case '{case_id}' decision is '{receipt_data.get('decision')}'. "
+            "Payment sheets cannot be issued for rejected or unapproved cases.",
+            4,
+        )
+
+    # 3. Execute deterministic pipeline pass 2 with verified approval receipt
+    db_path = Path(ledger_db) if ledger_db else root / "ledger.db"
+    res2 = run_pipeline(
+        invoice_path=inv_file,
+        vendor_path=vendor_file,
+        out_dir=case_dir,
+        base_dir=root,
+        with_approval=receipt_p,
+        require_approval=True,
+        signing_key_file=key_path,
+        ledger_db=db_path,
+    )
+
+    corrected_csv = case_dir / "corrected_payment.csv"
+    if not corrected_csv.exists():
+        raise ToolError("Finalization failed: corrected_payment.csv was not produced", 2)
+
+    summary = res2.get("artifact_summary", {})
+    payable_str = summary.get("payable_total") or receipt_data.get("approved_amount", "0.00")
+    withheld_str = summary.get("withheld_total") or receipt_data.get("withheld_amount", "0.00")
+
+    return {
+        "ok": True,
+        "case_id": case_id,
+        "payment_status": "AUTHORIZED",
+        "payable_amount": payable_str,
+        "withheld_amount": withheld_str,
+        "payment_sheet": str(corrected_csv),
+        "receipt_id": receipt_data.get("receipt_id"),
+        "receipt_hash": receipt_data.get("receipt_hash") or receipt_data.get("receipt_signature"),
+        "authenticated_actor": receipt_data.get("actor_id"),
+    }
+
+
+# -----------------------------------------------------------------------------
+# Main CLI Dispatcher
+# -----------------------------------------------------------------------------
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    # intake
+    p_intake = sub.add_parser("intake", help="Intake raw invoice and contract into case")
+    p_intake.add_argument("invoice", help="Path to invoice file (.json or .txt)")
+    p_intake.add_argument("contract", help="Path to contract / vendor file (.json or .md)")
+    p_intake.add_argument("--case-id", help="Explicit case identifier")
+    p_intake.add_argument("--cases-dir", default="cases", help="Cases base directory")
+
+    # audit
+    p_audit = sub.add_parser("audit", help="Run deterministic audit and emit pre-approval preview")
+    p_audit.add_argument("case", help="Case ID or path (e.g. 'demo-overcharge')")
+    p_audit.add_argument("--cases-dir", default="cases", help="Cases base directory")
+    p_audit.add_argument("--ledger-db", help="Path to ledger.db")
+
+    # status
+    p_status = sub.add_parser("status", help="Get 4-dimensional case status and totals")
+    p_status.add_argument("case", help="Case ID or path")
+    p_status.add_argument("--cases-dir", default="cases", help="Cases base directory")
+
+    # history
+    p_history = sub.add_parser("history", help="Query case audit trail or vendor history")
+    p_history.add_argument("case", nargs="?", help="Optional Case ID or path")
+    p_history.add_argument("--vendor", help="Vendor ID to query historical cases and outcomes")
+    p_history.add_argument("--cases-dir", default="cases", help="Cases base directory")
+    p_history.add_argument("--ledger-db", help="Path to ledger.db")
+
+    # finalize
+    p_finalize = sub.add_parser("finalize", help="Verify approval and generate corrected payment sheet")
+    p_finalize.add_argument("case", help="Case ID or path")
+    p_finalize.add_argument("--cases-dir", default="cases", help="Cases base directory")
+    p_finalize.add_argument("--key-file", help="Path to signing key file")
+    p_finalize.add_argument("--ledger-db", help="Path to ledger.db")
+
+    # NOTE: NO 'approve' subcommand is registered. Agents cannot approve.
+
+    args = ap.parse_args()
+
+    if args.cmd == "intake":
+        res = run_intake(
+            invoice_path=args.invoice,
+            contract_path=args.contract,
+            case_id=args.case_id,
+            cases_dir=args.cases_dir,
+        )
+        emit(res)
+        return 0
+
+    elif args.cmd == "audit":
+        res = run_audit(
+            case_arg=args.case,
+            cases_dir=args.cases_dir,
+            ledger_db=args.ledger_db,
+        )
+        emit(res)
+        return 0
+
+    elif args.cmd == "status":
+        res = run_status(
+            case_arg=args.case,
+            cases_dir=args.cases_dir,
+        )
+        emit(res)
+        return 0
+
+    elif args.cmd == "history":
+        res = run_history(
+            case_arg=args.case,
+            vendor_id=args.vendor,
+            cases_dir=args.cases_dir,
+            ledger_db=args.ledger_db,
+        )
+        emit(res)
+        return 0
+
+    elif args.cmd == "finalize":
+        res = run_finalize(
+            case_arg=args.case,
+            cases_dir=args.cases_dir,
+            signing_key_file=args.key_file,
+            ledger_db=args.ledger_db,
+        )
+        emit(res)
+        return 0
+
+    return 2
+
+
+if __name__ == "__main__":
+    run_cli(main)
