@@ -33,4 +33,9 @@ def test_four_demo_cases_end_to_end(tmp_path):
     assert res["cases"]["case_b_overcharge"]["withheld_total"] == "6000.00"
     assert res["cases"]["case_c_review_required"]["status"] == "PASSED"
     assert res["cases"]["case_d_blocked"]["status"] == "PASSED"
+    assert res["cases"]["case_e_tampering"]["status"] == "PASSED"
+    assert res["cases"]["case_e_tampering"]["tampering_detected"] is True
+    assert res["cases"]["case_f_ledger_failure"]["status"] == "PASSED"
+    assert res["cases"]["case_f_ledger_failure"]["pipeline_refused_fail_closed"] is True
+    assert res["audit_package_exported"]["package_verified"] is True
     assert res["ledger_summary"]["chain_valid"] is True
