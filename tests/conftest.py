@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -9,6 +10,39 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def fresh_clone_test_environment(tmp_path_factory):
+    """Ensure key isolation outside the repository and generate demo artifacts if missing on fresh clone."""
+    # 1. Isolate keys into a temporary test directory so no key files are written to the repo
+    test_key_dir = tmp_path_factory.mktemp("test_keys")
+    os.environ["OVERCHARGE_KEY_DIR"] = str(test_key_dir)
+    from auth import ensure_signing_key
+    key_path = test_key_dir / "signing.key"
+    ensure_signing_key(key_path)
+
+    # 2. Check if demo artifacts exist and are signed with active session key; if not, generate them
+    demo_receipt = ROOT / "cases" / "demo-overcharge" / "approvals" / "approval_receipt.json"
+    needs_regen = not demo_receipt.exists()
+    if not needs_regen:
+        try:
+            from approval_receipt import verify_approval_receipt
+            from auth import load_signing_key
+            kb = load_signing_key(key_path)
+            rec = json.loads(demo_receipt.read_text(encoding="utf-8"))
+            valid, _ = verify_approval_receipt(rec, kb)
+            if not valid:
+                needs_regen = True
+        except Exception:
+            needs_regen = True
+
+    if needs_regen:
+        from tools.run_demo_suite import run_full_demo
+        try:
+            run_full_demo(base_dir=ROOT, clean_run=False, key_file=key_path)
+        except Exception:
+            pass
 
 
 @pytest.fixture
