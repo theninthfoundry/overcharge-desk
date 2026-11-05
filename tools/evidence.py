@@ -118,13 +118,13 @@ def register_evidence(
     else:
         case_id = registry.get("case_id") or "OC-UNKNOWN"
 
-    # Try storing relative path if inside case_dir or base_dir
+    # Try storing relative path: relative to c_dir first (for self-contained portability), then relative to base
     stored_path: str
     try:
-        stored_path = str(resolved_path.relative_to(base)).replace("\\", "/")
+        stored_path = str(resolved_path.relative_to(c_dir.resolve())).replace("\\", "/")
     except ValueError:
         try:
-            stored_path = str(resolved_path.relative_to(c_dir.resolve())).replace("\\", "/")
+            stored_path = str(resolved_path.relative_to(base)).replace("\\", "/")
         except ValueError:
             stored_path = str(resolved_path).replace("\\", "/")
 
@@ -206,18 +206,25 @@ def verify_evidence(
         stored_path = item.get("stored_path")
         orig_name = item.get("original_filename")
 
-        # Resolve path
+        # Resolve path: try relative to case_dir first, then relative to base
         path_candidate = Path(stored_path)
         if not path_candidate.is_absolute():
-            # Try relative to base, then relative to case_dir
-            if (base / path_candidate).exists():
-                actual_path = base / path_candidate
-            elif (c_dir / path_candidate).exists():
+            stripped_parts = list(path_candidate.parts)
+            if len(stripped_parts) >= 2 and stripped_parts[0] == "cases":
+                stripped_path = Path(*stripped_parts[2:])
+            else:
+                stripped_path = path_candidate
+
+            if (c_dir / path_candidate).exists():
                 actual_path = c_dir / path_candidate
+            elif (c_dir / stripped_path).exists():
+                actual_path = c_dir / stripped_path
             elif (c_dir / orig_name).exists():
                 actual_path = c_dir / orig_name
-            else:
+            elif (base / path_candidate).exists():
                 actual_path = base / path_candidate
+            else:
+                actual_path = c_dir / path_candidate
         else:
             actual_path = path_candidate
 
