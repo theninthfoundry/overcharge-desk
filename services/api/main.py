@@ -2,7 +2,17 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
+
+# Ensure repo root and tools directory are in sys.path for direct CLI/uvicorn execution
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+TOOLS_DIR = ROOT_DIR / "tools"
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
