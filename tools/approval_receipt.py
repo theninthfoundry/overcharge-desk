@@ -127,6 +127,7 @@ def compute_receipt_hash(receipt_body: dict) -> str:
 
 
 def sign_receipt(receipt_body: dict, key_bytes: bytes) -> dict:
+    # Cryptographic Signature: HMAC-SHA-256 computation over sorted canonical JSON bytes
     """Compute receipt hash and sign it using HMAC-SHA-256."""
     r_hash = compute_receipt_hash(receipt_body)
     sig = hmac.new(key_bytes, r_hash.encode("utf-8"), hashlib.sha256).hexdigest()
