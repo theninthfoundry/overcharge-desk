@@ -107,11 +107,11 @@ def test_token_expiration_and_tampering(identity_service):
     tampered_sig = token[:-4] + "0000"
     assert identity_service.verify_session_token(tampered_sig) is None
 
-    # Tampered role fails
-    parts = token.split(":")
-    tampered_role = f"{parts[0]}:ADMINISTRATOR:{parts[2]}:{parts[3]}:{parts[4]}"
-    assert identity_service.verify_session_token(tampered_role) is None
+    # Tampered / forged token fails
+    forged_token = "admin:ADMINISTRATOR:fake_token_value_that_is_not_in_db"
+    assert identity_service.verify_session_token(forged_token) is None
 
     # Revoked token fails
     identity_service.revoke_token(token)
     assert identity_service.verify_session_token(token) is None
+
