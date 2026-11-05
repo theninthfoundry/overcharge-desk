@@ -96,6 +96,7 @@ def health_check():
         checks["storage"] = f"ERROR: {exc}"
         is_ready = False
 
+    # Aggregated status: READY indicates all subsystems passed; DEGRADED alerts orchestrators/load balancers
     overall_status = "READY" if is_ready else "DEGRADED"
 
     return {
