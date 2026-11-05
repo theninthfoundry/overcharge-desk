@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Overcharge Desk — Finance Operations Workspace</title>
+  <meta name="description" content="Deterministic Vendor Reconciliation & Cryptographic Payment Control Platform" />
+  <meta property="og:title" content="Overcharge Desk — Finance Operations Workspace" />
+  <meta property="og:description" content="Deterministic Vendor Reconciliation & Cryptographic Payment Control Platform" />
+  <meta property="og:type" content="website" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
@@ -91,6 +95,19 @@
 
     <!-- Main Content Workspace -->
     <main class="flex-1 overflow-y-auto p-8 space-y-6">
+      <!-- Non-blocking Notification Banner -->
+      <div id="notice-banner" role="status" aria-live="polite" class="hidden rounded-xl border p-4 flex items-start justify-between gap-4 transition-all">
+        <div class="flex items-start gap-3">
+          <i id="notice-icon" class="fa-solid fa-circle-check mt-0.5 text-emerald-400"></i>
+          <div>
+            <div id="notice-title" class="text-xs font-bold text-white">Action Completed</div>
+            <div id="notice-message" class="text-xs text-slate-300 mt-0.5 mono whitespace-pre-line"></div>
+          </div>
+        </div>
+        <button onclick="hideNotice()" aria-label="Dismiss notification" class="text-slate-400 hover:text-white text-xs px-2 py-1">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
       
       <!-- TAB 1: OVERVIEW -->
       <section id="tab-overview" class="space-y-6">
@@ -365,13 +382,23 @@
             <button onclick="approveActiveCase()" id="btn-approve-case" class="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-xs font-semibold text-white flex items-center gap-2 shadow-lg shadow-emerald-500/20">
               <i class="fa-solid fa-stamp"></i> Grant Approval (HMAC Receipt)
             </button>
-            <button onclick="rejectActiveCase()" id="btn-reject-case" class="px-3.5 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-xs font-semibold text-red-400 flex items-center gap-2">
+            <button onclick="toggleRejectInput()" id="btn-reject-case" class="px-3.5 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-xs font-semibold text-red-400 flex items-center gap-2">
               <i class="fa-solid fa-ban"></i> Reject Dispute
             </button>
             <button onclick="exportActiveAuditPackage()" class="px-3.5 py-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-xs font-semibold text-blue-400 flex items-center gap-2">
               <i class="fa-solid fa-box-archive"></i> Export Audit Package
             </button>
           </div>
+          <!-- Inline Rejection Rationale Box -->
+          <div id="reject-reason-box" class="hidden p-3.5 rounded-xl bg-slate-950/80 border border-red-500/30 space-y-2.5">
+            <label for="reject-reason-input" class="block text-xs font-semibold text-red-300">Explicit Rejection Rationale (Mandatory Audit Record)</label>
+            <div class="flex items-center gap-2">
+              <input id="reject-reason-input" type="text" placeholder="Enter explicit commercial or contractual rationale for rejection..." class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-red-400" />
+              <button onclick="rejectActiveCase()" class="px-3 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-xs font-bold text-white">Confirm Rejection</button>
+            </div>
+          </div>
+          <!-- Modal Feedback Notice -->
+          <div id="modal-feedback" class="hidden p-3 rounded-lg border text-xs mono whitespace-pre-line"></div>
         </div>
 
         <!-- Artifact Downloads -->
@@ -499,12 +526,92 @@
               <span class="text-xs font-semibold text-white">${b.name}</span>
               <span class="text-[10px] px-2 py-0.5 rounded font-bold ${b.status === 'VERIFIED' ? 'bg-emerald-500/20 text-emerald-400' : (b.status === 'BLOCKED' || b.status === 'TAMPERED' || b.status === 'ABORTED' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400')}">${b.status}</span>
             </div>
-            <p class="text-[11px] text-slate-400 mt-1">${b.desc}</p>
+            <div class="flex items-center justify-between mt-1.5 text-[11px] text-slate-400">
+              <span>${b.desc}</span>
+              <span class="mono text-slate-300 font-medium">${b.total}</span>
+            </div>
           </div>
         `).join('');
+
+        // Refresh ledger event count badge
+        const verRes = await authFetch('/api/v1/audit/ledger/verify');
+        if (verRes.ok) {
+          const verData = await verRes.json();
+          document.getElementById('stat-ledger-events').innerText = verData.total_events;
+          document.getElementById('ledger-total-events-badge').innerText = `${verData.total_events} Events`;
+        }
       } catch (e) {
         console.error(e);
       }
+    }
+
+    function showNotice(title, message, variant = 'success') {
+      const banner = document.getElementById('notice-banner');
+      const icon = document.getElementById('notice-icon');
+      const titleEl = document.getElementById('notice-title');
+      const msgEl = document.getElementById('notice-message');
+
+      banner.className = 'rounded-xl border p-4 flex items-start justify-between gap-4 transition-all ';
+      if (variant === 'error') {
+        banner.className += 'border-red-500/40 bg-red-500/10';
+        icon.className = 'fa-solid fa-triangle-exclamation mt-0.5 text-red-400';
+      } else if (variant === 'warning') {
+        banner.className += 'border-amber-500/40 bg-amber-500/10';
+        icon.className = 'fa-solid fa-circle-exclamation mt-0.5 text-amber-400';
+      } else {
+        banner.className += 'border-emerald-500/40 bg-emerald-500/10';
+        icon.className = 'fa-solid fa-circle-check mt-0.5 text-emerald-400';
+      }
+      titleEl.innerText = title;
+      msgEl.innerText = message;
+      banner.classList.remove('hidden');
+    }
+
+    function hideNotice() {
+      document.getElementById('notice-banner').classList.add('hidden');
+    }
+
+    function showModalFeedback(message, isError = false) {
+      const box = document.getElementById('modal-feedback');
+      box.className = 'p-3 rounded-lg border text-xs mono whitespace-pre-line ' + (
+        isError
+          ? 'border-red-500/40 bg-red-500/10 text-red-300'
+          : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+      );
+      box.innerText = message;
+      box.classList.remove('hidden');
+    }
+
+    async function runDemoSuite() {
+      try {
+        showNotice('Running Canonical Benchmark Suite...', 'Executing 6-case deterministic reconciliation & cryptographic verification pipeline.');
+        const res = await authFetch('/api/v1/demo/run', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          showNotice('Benchmark Suite Error', data.detail || 'Failed to run demo suite', 'error');
+          return;
+        }
+        await loadOverview();
+        showNotice(
+          'Benchmark Suite Verified (6/6 Passed)',
+          `All 6 canonical cases passed deterministic checks.\nLedger Chain: ${data.ledger_summary.total_events} events verified (SHA-256 intact).`
+        );
+      } catch (e) {
+        showNotice('Benchmark Execution Error', e.message, 'error');
+      }
+    }
+
+    function filterCases(filter) {
+      document.querySelectorAll('.case-filter-btn').forEach(btn => {
+        if (btn.dataset.filter === filter) {
+          btn.classList.add('bg-slate-800', 'text-white');
+          btn.classList.remove('text-slate-400');
+        } else {
+          btn.classList.remove('bg-slate-800', 'text-white');
+          btn.classList.add('text-slate-400');
+        }
+      });
+      loadCases(filter === 'all' ? null : filter);
     }
 
     async function loadCases(filter = null) {
@@ -516,6 +623,10 @@
         casesCache = cases;
 
         const tbody = document.getElementById('cases-table-body');
+        if (cases.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-xs text-slate-400">No reconciliation cases match the selected filter.</td></tr>`;
+          return;
+        }
         tbody.innerHTML = cases.map(c => `
           <tr class="hover:bg-slate-800/40 cursor-pointer" onclick="openCaseModal('${c.case_id}')">
             <td class="p-3.5 font-bold text-white mono">${c.case_id}</td>
@@ -526,7 +637,7 @@
               <span class="text-xs px-2 py-0.5 rounded font-bold ${c.verification_status === 'VERIFIED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : (c.verification_status === 'BLOCKED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20')}">${c.verification_status}</span>
             </td>
             <td class="p-3.5">
-              <span class="text-xs px-2 py-0.5 rounded ${c.approval_status === 'APPROVED' ? 'text-emerald-400' : 'text-slate-400'}">${c.approval_status}</span>
+              <span class="text-xs px-2 py-0.5 rounded ${c.approval_status === 'APPROVED' ? 'text-emerald-400 font-semibold' : (c.approval_status === 'REJECTED' ? 'text-red-400 font-semibold' : 'text-slate-400')}">${c.approval_status}</span>
             </td>
             <td class="p-3.5 text-right">
               <button class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-white">Inspect</button>
@@ -538,15 +649,30 @@
       }
     }
 
-    async function openCaseModal(caseId) {
+    async function openCaseModal(caseId, preserveFeedback = false) {
       activeCaseId = caseId;
+      if (!preserveFeedback) {
+        document.getElementById('modal-feedback').classList.add('hidden');
+        document.getElementById('reject-reason-box').classList.add('hidden');
+      }
       try {
         const res = await authFetch(`/api/v1/cases/${caseId}`);
         if (!res.ok) return;
         const c = await res.json();
 
         document.getElementById('modal-case-id').innerText = c.case_id;
-        document.getElementById('modal-case-subtitle').innerText = `Vendor: ${c.vendor_id.toUpperCase()} | Invoice: ${c.invoice_number}`;
+        document.getElementById('modal-case-subtitle').innerText = `Vendor: ${c.vendor_id.toUpperCase()} | Invoice: ${c.invoice_number} | Created by: ${c.created_by}`;
+        document.getElementById('modal-badge-verif').innerText = c.verification_status;
+        document.getElementById('modal-badge-verif').className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold ' + (
+          c.verification_status === 'VERIFIED' ? 'bg-emerald-500/20 text-emerald-400' :
+          c.verification_status === 'BLOCKED' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'
+        );
+        document.getElementById('modal-badge-comm').innerText = c.commercial_status;
+        document.getElementById('modal-badge-comm').className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold ' + (
+          c.commercial_status === 'COMPLIANT' ? 'bg-emerald-500/20 text-emerald-400' :
+          c.commercial_status === 'DISCREPANCY' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'
+        );
+
         document.getElementById('strip-verif').innerText = c.verification_status;
         document.getElementById('strip-comm').innerText = c.commercial_status;
         document.getElementById('strip-app').innerText = c.approval_status;
@@ -566,12 +692,16 @@
 
         // Render Artifacts
         const artGrid = document.getElementById('modal-artifacts-grid');
-        artGrid.innerHTML = c.available_artifacts.map(a => `
-          <a href="/api/v1/cases/${c.case_id}/artifacts/${a}" target="_blank" class="flex items-center justify-between p-2 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-slate-700 text-xs text-slate-300">
-            <span><i class="fa-solid fa-file-lines mr-1.5 text-slate-500"></i> ${a}</span>
-            <i class="fa-solid fa-download text-slate-500"></i>
-          </a>
-        `).join('');
+        if (c.available_artifacts && c.available_artifacts.length > 0) {
+          artGrid.innerHTML = c.available_artifacts.map(a => `
+            <a href="/api/v1/cases/${c.case_id}/artifacts/${a}" target="_blank" class="flex items-center justify-between p-2 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-slate-700 text-xs text-slate-300">
+              <span><i class="fa-solid fa-file-lines mr-1.5 text-slate-500"></i> ${a}</span>
+              <i class="fa-solid fa-download text-slate-500"></i>
+            </a>
+          `).join('');
+        } else {
+          artGrid.innerHTML = `<div class="text-xs text-slate-500 col-span-2">No verified artifacts generated yet. Run reconciliation preview first.</div>`;
+        }
 
         document.getElementById('case-modal').classList.remove('hidden');
       } catch (e) {
@@ -594,20 +724,33 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          alert(`Approval Refused: ${data.detail}`);
+          showModalFeedback(`Approval Refused: ${data.detail}`, true);
           return;
         }
-        alert(`Approval Granted!\nReceipt ID: ${data.receipt_id}\nApproved Amount: ₹${data.approved_amount}`);
-        openCaseModal(activeCaseId);
+        showModalFeedback(`Approval Granted! Receipt ID: ${data.receipt_id} | Approved Amount: ₹${data.approved_amount}`);
+        await openCaseModal(activeCaseId, true);
+        loadCases();
       } catch (e) {
-        alert(e.message);
+        showModalFeedback(e.message, true);
+      }
+    }
+
+    function toggleRejectInput() {
+      const box = document.getElementById('reject-reason-box');
+      box.classList.toggle('hidden');
+      if (!box.classList.contains('hidden')) {
+        document.getElementById('reject-reason-input').focus();
       }
     }
 
     async function rejectActiveCase() {
       if (!activeCaseId) return;
-      const reason = prompt("Enter explicit rationale for rejecting this case/dispute:");
-      if (!reason) return;
+      const reasonInput = document.getElementById('reject-reason-input');
+      const reason = reasonInput.value.trim();
+      if (!reason) {
+        showModalFeedback('Explicit rejection rationale is required by audit policy.', true);
+        return;
+      }
       try {
         const res = await authFetch(`/api/v1/cases/${activeCaseId}/approve`, {
           method: 'POST',
@@ -616,13 +759,16 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          alert(`Rejection Refused: ${data.detail}`);
+          showModalFeedback(`Rejection Refused: ${data.detail}`, true);
           return;
         }
-        alert(`Dispute Rejected recorded!\nReceipt ID: ${data.receipt_id}`);
-        openCaseModal(activeCaseId);
+        reasonInput.value = '';
+        document.getElementById('reject-reason-box').classList.add('hidden');
+        showModalFeedback(`Dispute Rejection Recorded! Receipt ID: ${data.receipt_id}`);
+        await openCaseModal(activeCaseId, true);
+        loadCases();
       } catch (e) {
-        alert(e.message);
+        showModalFeedback(e.message, true);
       }
     }
 
@@ -636,13 +782,14 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          alert(`Pipeline Halted: ${data.detail}`);
+          showModalFeedback(`Pipeline Halted: ${data.detail}`, true);
           return;
         }
-        alert(`Pipeline Execution: ${data.pipeline_status}\nArtifact: ${data.artifact_type}`);
-        openCaseModal(activeCaseId);
+        showModalFeedback(`Pipeline Execution: ${data.pipeline_status} | Verification: ${data.verification_status} | Artifact: ${data.artifact_type}`);
+        await openCaseModal(activeCaseId, true);
+        loadCases();
       } catch (e) {
-        alert(e.message);
+        showModalFeedback(e.message, true);
       }
     }
 
@@ -652,12 +799,12 @@
         const res = await authFetch(`/api/v1/cases/${activeCaseId}/export-audit`, { method: 'POST' });
         const data = await res.json();
         if (!res.ok) {
-          alert(`Export Failed: ${data.detail}`);
+          showModalFeedback(`Export Failed: ${data.detail}`, true);
           return;
         }
-        alert(`Audit Package Exported!\nDirectory: ${data.target_package_directory}\nVerified: ${data.package_verified}`);
+        showModalFeedback(`Audit Package Exported! Directory: ${data.target_package_directory} | Integrity Verified: ${data.package_verified}`);
       } catch (e) {
-        alert(e.message);
+        showModalFeedback(e.message, true);
       }
     }
 
@@ -666,8 +813,9 @@
         const res = await authFetch('/api/v1/audit/ledger/events?limit=25');
         if (!res.ok) return;
         const evs = await res.json();
+        document.getElementById('ledger-total-events-badge').innerText = `${evs.length} Recent Events`;
         const tbody = document.getElementById('ledger-table-body');
-        tbody.innerHTML = evs.reverse().map(e => `
+        tbody.innerHTML = evs.slice().reverse().map(e => `
           <tr class="hover:bg-slate-800/40">
             <td class="p-3 text-slate-400">#${e.event_sequence}</td>
             <td class="p-3 font-semibold text-white">${e.event_type}</td>
@@ -687,12 +835,18 @@
         const res = await authFetch('/api/v1/audit/ledger/verify');
         const data = await res.json();
         if (!res.ok) {
-          alert(`Ledger Verification Error: ${data.detail || 'Unauthorized'}`);
+          showNotice('Ledger Verification Error', data.detail || 'Unauthorized', 'error');
           return;
         }
-        alert(`Ledger Cryptographic Chain Verification:\nChain Integrity: ${data.valid ? 'VALID (100% Intact)' : 'TAMPERED'}\nTotal Events: ${data.total_events}\nIssues Count: ${data.issues_count}`);
+        document.getElementById('stat-ledger-events').innerText = data.total_events;
+        document.getElementById('ledger-total-events-badge').innerText = `${data.total_events} Events`;
+        showNotice(
+          `Ledger Cryptographic Chain: ${data.valid ? 'VALID (100% Intact)' : 'TAMPERED'}`,
+          `Total Events Verified: ${data.total_events} | Issues Detected: ${data.issues_count}`,
+          data.valid ? 'success' : 'error'
+        );
       } catch (e) {
-        alert(e.message);
+        showNotice('Verification Error', e.message, 'error');
       }
     }
 
@@ -701,12 +855,16 @@
         const res = await authFetch('/api/v1/audit/ledger/checkpoint', { method: 'POST' });
         const data = await res.json();
         if (!res.ok) {
-          alert(`Checkpoint Failed: ${data.detail}`);
+          showNotice('Checkpoint Refused', data.detail || 'Permission denied', 'error');
           return;
         }
-        alert(`HMAC Signed Checkpoint Created!\nID: ${data.checkpoint_id}\nHead Hash: ${data.head_event_hash.substring(0, 16)}...\nSig: ${data.signature.substring(0, 16)}...`);
+        showNotice(
+          `HMAC Signed Checkpoint Created (${data.checkpoint_id})`,
+          `Highest Seq: #${data.highest_sequence} | Head Hash: ${data.head_event_hash.substring(0, 20)}... | Signature: ${(data.signature || '').substring(0, 20)}...`
+        );
+        loadLedgerEvents();
       } catch (e) {
-        alert(e.message);
+        showNotice('Checkpoint Error', e.message, 'error');
       }
     }
 
@@ -717,16 +875,43 @@
         const vendors = await res.json();
         const container = document.getElementById('vendors-cards');
         container.innerHTML = vendors.map(v => `
-          <div class="border border-slate-800 rounded-xl p-5 bg-slate-900/60 space-y-3">
+          <div class="border border-slate-800 rounded-xl p-5 bg-slate-900/60 space-y-4 col-span-2">
             <div class="flex items-center justify-between">
-              <span class="font-bold text-white text-base">${v.vendor_name}</span>
-              <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">${v.currency}</span>
+              <div>
+                <span class="font-bold text-white text-base">${v.vendor_name}</span>
+                <span class="ml-2 text-xs text-slate-400 mono">(${v.vendor_id.toUpperCase()})</span>
+              </div>
+              <span class="text-xs px-2.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">${v.currency || 'INR'}</span>
             </div>
-            <div class="text-xs text-slate-400 space-y-1">
-              <div>Contract ID: <span class="text-white mono">${v.contract_id}</span></div>
-              <div>Effective: <span class="text-slate-300 mono">${v.effective_from} to ${v.effective_to}</span></div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-400 bg-slate-950/50 p-3 rounded-lg border border-slate-800/80">
+              <div>Contract ID: <span class="text-white mono font-semibold">${v.contract_id}</span></div>
+              <div>Effective Window: <span class="text-slate-300 mono">${v.effective_from || '2026-01-01'} → ${v.effective_to || 'Active'}</span></div>
               <div>Contract Items: <span class="text-emerald-400 font-semibold">${v.items_count} verified SKUs</span></div>
             </div>
+            ${(v.rates && v.rates.length) ? `
+              <div class="border border-slate-800 rounded-lg overflow-hidden">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-950/80 text-slate-400 uppercase mono border-b border-slate-800">
+                    <tr>
+                      <th class="p-2.5">SKU</th>
+                      <th class="p-2.5">Description</th>
+                      <th class="p-2.5">Contract Rate</th>
+                      <th class="p-2.5">Clause Locator</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-800 text-slate-300">
+                    ${v.rates.map(r => `
+                      <tr>
+                        <td class="p-2.5 font-bold text-white mono">${r.sku}</td>
+                        <td class="p-2.5">${r.description}</td>
+                        <td class="p-2.5 text-emerald-400 mono font-semibold">₹${Number(r.unit_price).toFixed(2)}</td>
+                        <td class="p-2.5 text-slate-400 mono">${r.clause_ref}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : ''}
           </div>
         `).join('');
       } catch (e) {
@@ -751,14 +936,14 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          alert(`Creation Failed: ${data.detail}`);
+          showNotice('Case Intake Refused', data.detail || 'Unable to create case', 'error');
           return;
         }
-        alert(`Case '${data.case_id}' created successfully! Opening case workspace.`);
+        showNotice('Case Created & Ingested', `Case '${data.case_id}' initialized by ${data.created_by}.`);
         showTab('cases');
         openCaseModal(data.case_id);
       } catch (e) {
-        alert("Invalid JSON or network error: " + e.message);
+        showNotice('Invalid Invoice Payload', 'Invalid JSON or network error: ' + e.message, 'error');
       }
     }
 

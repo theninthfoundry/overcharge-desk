@@ -210,6 +210,9 @@ def run_full_demo(
     case_e_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(case_a_inv, case_e_dir / "invoice.json")
     case_e_inv = case_e_dir / "invoice.json"
+    inv_e_init = load_json(case_e_inv)
+    inv_e_init["case_id"] = "OC-20261001-02"
+    write_json_atomic(case_e_inv, inv_e_init)
 
     p_e1 = run_pipeline(case_e_inv, vendor_file, case_e_dir, base_dir=root, ledger_db=ledger_db)
     app_e = process_approval_decision(
@@ -257,6 +260,9 @@ def run_full_demo(
     case_f_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(case_a_inv, case_f_dir / "invoice.json")
     case_f_inv = case_f_dir / "invoice.json"
+    inv_f_init = load_json(case_f_inv)
+    inv_f_init["case_id"] = "OC-20261001-03"
+    write_json_atomic(case_f_inv, inv_f_init)
 
     bad_ledger_db = case_f_dir / "unwriteable_ledger_dir"
     bad_ledger_db.mkdir(parents=True, exist_ok=True)
