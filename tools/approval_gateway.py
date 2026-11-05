@@ -131,6 +131,7 @@ def process_approval_decision(
 
     if decision == "APPROVED":
         # Fail-closed: Never approve a BLOCKED audit
+        # Invariant Rule 1.4: Refuses approval on arithmetic discrepancies or hash mismatches
         if v_status == STATE_BLOCKED:
             blocking = comp_data.get("blocking_issues", [])
             raise ToolError(
