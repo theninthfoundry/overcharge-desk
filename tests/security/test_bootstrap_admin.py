@@ -53,7 +53,8 @@ def test_bootstrap_seed_demo_accounts_explicit(tmp_path):
         db_path=db_file,
         seed_demo_accounts=True,
     )
-    assert len(res["demo_accounts_seeded"]) == 5
+    assert len(res["demo_accounts_seeded"]) == 6
+    assert "owner" in res["demo_accounts_seeded"]
     repo = IdentityRepository(db_path=db_file)
     op = repo.get_user_by_username("operator")
     assert op is not None
