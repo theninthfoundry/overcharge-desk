@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.4.0] - 2026-11-05
+
+### Added
+- **Switch Multi-Agent Terminal Simulator (`tools/simulate_switch.py`)**:
+  - Live 4-turn interactive terminal simulation of `#overcharge-desk` with styled ANSI badges and realistic latency pacing.
+  - Demonstrates full multi-agent workflow: Intake Agent registration, Auditor Agent deterministic rate comparison, cross-invoice vendor memory recall, interactive owner authorization, and Settlement Agent payment release.
+  - Supports `--fast` flag for instant automated verification.
+- **Unified Quickstart Runner (`tools/quickstart.py`)**:
+  - 1-command verification running all 6 canonical benchmarks, SQLite cryptographic hash chain audit, test baseline check, and optional `--serve` local dashboard launch.
+- **Cryptographic Receipt Inspector CLI (`tools/inspect_receipt.py`)**:
+  - Standalone utility to inspect, decode, and cryptographically verify human approval receipts (`receipt.json`) without running the full pipeline.
+  - Validates full 64-character SHA-256 digests and HMAC signatures against active keys.
+- **Standalone Health Check Probe (`tools/health_check.py`)**:
+  - Fast CLI probe verifying decimal arithmetic precision, Argon2id library readiness, case storage directory containment, and SQLite ledger chain validity.
+- **Comprehensive Documentation Architecture**:
+  - `docs/SWITCH_INTEGRATION_GUIDE.md`: Deep walkthrough of Mattermost/Switch setup, webhooks, slash commands, and multi-agent coordination.
+  - `docs/MULTI_AGENT_PROTOCOL.md`: Inter-process communication protocol and message schemas.
+  - `docs/VENDOR_MEMORY_SYSTEM.md`: Historical vendor memory mechanics and credit note status invariants.
+  - `docs/FAIL_CLOSED_VERIFICATION.md`: Fail-closed verification guarantees and arithmetic quarantining.
+  - `docs/ARGON2ID_IDENTITY_SPEC.md`: Argon2id configuration rationale and separation of duties matrix.
+  - `docs/TAMPER_EVIDENT_STORAGE.md`: Merkle and SQLite hash chain tamper-evidence architecture.
+  - `docs/FINANCIAL_DECIMAL_POLICY.md`: Exact decimal arithmetic standards and IEEE 754 float hazard mitigations.
+  - `docs/OPERATIONAL_RUNBOOK.md`: Production deployment, incident response, and key rotation procedures.
+  - `docs/TROUBLESHOOTING.md`: Error taxonomy and remediation reference guide.
+  - `docs/API_REFERENCE.md`: Complete REST API endpoints and schema reference.
+  - `docs/HACKATHON_SUBMISSION.md`: Executive summary and judging brief for hackathon review.
+- **Automated Test Suite Expansion**:
+  - Added `tests/test_vendor_memory_mechanics.py` and `tests/test_health_and_inspect_cli.py`.
+  - Certified test baseline expanded to **236 automated tests** (235 passed, 1 skipped) across 23 test modules.
+
+---
+
 ## [3.3.0] - 2026-11-05
 
 ### Added
