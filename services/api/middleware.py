@@ -108,7 +108,15 @@ def require_permission(permission: str) -> Callable[[User], User]:
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Enforces standard security headers on all HTTP responses."""
+    """Enforces standard security headers on all HTTP responses.
+    
+    Headers Set:
+    - X-Content-Type-Options: nosniff (MIME-sniffing prevention)
+    - X-Frame-Options: DENY (anti-clickjacking)
+    - Referrer-Policy: strict-origin-when-cross-origin
+    - Content-Security-Policy: default-src 'self' (XSS mitigation)
+    - X-Request-ID: End-to-end request correlation tracking
+    """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Request correlation ID
