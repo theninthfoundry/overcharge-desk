@@ -34,7 +34,13 @@ class KeyMetadata:
 
 
 class KeyManager:
-    """Manages cryptographic provisioning keys, historical verification, and key rotation."""
+    """Manages cryptographic provisioning keys, historical verification, and key rotation.
+    
+    Cryptographic Invariants:
+    - Algorithm: HMAC-SHA-256 with 256-bit entropy (32 raw bytes / 64 hex characters).
+    - Lifecycle: Exactly one key is ACTIVE. Past rotated keys are RETIRED to permit historical receipt verification.
+    - Production Gate: Missing manifest or keys causes immediate fail-closed abort (code 4).
+    """
 
     def __init__(
         self,
