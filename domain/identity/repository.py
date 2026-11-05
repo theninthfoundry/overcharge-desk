@@ -56,6 +56,13 @@ class IdentityRepository:
         self.init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
+        """Obtain a transactional SQLite connection with WAL mode and foreign key integrity.
+        
+        Guarantees:
+        - PRAGMA foreign_keys = ON: Ensures session records reference valid users.
+        - PRAGMA journal_mode = WAL: Write-Ahead Logging allows concurrent readers and writers without lock contention.
+        - timeout = 30.0: Bounded wait time prevents indefinite blocking on busy locks.
+        """
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
@@ -338,3 +345,4 @@ class IdentityRepository:
                     )
             finally:
                 conn.close()
+
