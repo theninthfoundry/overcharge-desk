@@ -131,3 +131,31 @@ def test_export_blocked_if_vendor_destination_unverified(payment_service, tmp_pa
 
     with pytest.raises(ToolError, match="Vendor bank destination is unverified"):
         payment_service.export_instruction(inst.instruction_id, pay_op)
+
+
+def test_csv_formula_injection_escaping():
+    """Verify formula injection characters are properly sanitized in exports."""
+    from domain.payments.exports import export_payment_instruction_csv
+    from domain.payments.models import PaymentInstruction
+    inst = PaymentInstruction(
+        instruction_id="PI-TEST",
+        case_id="=cmd|' /C calc'!A0",  # malicious case_id
+        approval_receipt_id="+cmd|...",
+        approved_amount="100.00",
+        currency="INR",
+        vendor_id="@vendor",
+        destination_reference="-BANK",
+        destination_verified=True,
+        idempotency_key="IDEM",
+        status="AUTHORIZED",
+        created_at="2026-11-05T00:00:00Z",
+        expires_at="2026-11-12T00:00:00Z",
+    )
+    csv_out = export_payment_instruction_csv(inst)
+    # Each malicious prefix must be prepended with a single quote
+    assert "'=cmd" in csv_out
+    assert "'+cmd" in csv_out
+    assert "'@vendor" in csv_out
+    assert "'-BANK" in csv_out
+
+
