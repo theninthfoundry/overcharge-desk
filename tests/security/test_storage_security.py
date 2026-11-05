@@ -84,3 +84,18 @@ def test_oversized_upload_rejection(storage):
     oversized = b"0" * (10 * 1024 * 1024 + 1)  # 10 MB + 1 byte
     with pytest.raises(StorageSecurityError, match="exceeds maximum allowed size"):
         storage.write_artifact("OC-20261106-01", "invoice.json", oversized)
+
+
+def test_url_encoded_traversal_attempts(storage):
+    """Verify URL-encoded and alternate representation path traversals are refused."""
+    encoded_cases = [
+        "%2e%2e%2fetc",
+        "..%2f..%2fconfig",
+        "..%5c..%5cwindows",
+        "case%252e%252e",
+    ]
+    for cid in encoded_cases:
+        with pytest.raises(StorageSecurityError):
+            storage.validate_case_id(cid)
+
+
