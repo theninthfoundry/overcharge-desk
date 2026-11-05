@@ -1,3 +1,6 @@
 pytest>=7
+fastapi>=0.100.0
+uvicorn>=0.20.0
+httpx>=0.20.0
 
 # Python 3.9+ runtime environment
