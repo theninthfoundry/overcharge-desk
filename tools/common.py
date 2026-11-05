@@ -180,6 +180,7 @@ def is_safe_relative_path(path_str: str) -> bool:
 
 
 def canonical_json_bytes(obj: dict) -> bytes:
+    # Invariant Rule 5.2: Byte-for-byte deterministic serialization for cryptographic SHA-256
     """Deterministic, sorted-key UTF-8 byte serialization for cryptographic hashing."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
