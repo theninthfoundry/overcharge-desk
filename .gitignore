@@ -19,6 +19,15 @@ dist/
 
 # Ephemeral artifacts & cases
 cases/OC-*
+cases/demo-tampering/
+cases/demo-ledger-failure/
+cases/demo-*/audit/
+cases/demo-*/approvals/
+cases/demo-*/compare.json*
+cases/demo-*/evidence_registry.json
+cases/demo-*/manifest.json
+cases/demo-*/*.csv
+case_audit/
 *.tmp
 *.bak
 *.db
