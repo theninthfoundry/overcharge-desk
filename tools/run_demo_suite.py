@@ -25,14 +25,19 @@ from pathlib import Path
 
 from common import (STATE_BLOCKED, STATE_REVIEW_REQUIRED, STATE_VERIFIED,
                     ToolError, emit, load_json, run_cli, write_json_atomic)
-from auth import ensure_signing_key, issue_actor_token, load_actors_config
+from auth import ensure_signing_key, get_default_key_path, issue_actor_token, load_actors_config
 from approval_gateway import process_approval_decision
 from audit_ledger import DEFAULT_LEDGER_DB, list_events, verify_ledger
 from pipeline import run_pipeline
 from export_audit_package import export_case_audit, verify_package_integrity
 
 
-def run_full_demo(base_dir: Path | str = ".", clean_run: bool = False, cases_base_dir: Path | str | None = None) -> dict:
+def run_full_demo(
+    base_dir: Path | str = ".",
+    clean_run: bool = False,
+    cases_base_dir: Path | str | None = None,
+    key_file: Path | str | None = None,
+) -> dict:
     # Benchmark Suite: End-to-end verification across Clean, Overcharged, Review, Blocked, Tampered, and Failure cases
     """Execute all six benchmark demo cases end-to-end."""
     root = Path(base_dir)
@@ -41,7 +46,8 @@ def run_full_demo(base_dir: Path | str = ".", clean_run: bool = False, cases_bas
         vendor_file = root / "seed" / "acme.json"
 
     demo_results = {}
-    key_bytes = ensure_signing_key(root / "config" / "signing.key")
+    key_path = Path(key_file) if key_file else get_default_key_path()
+    key_bytes = ensure_signing_key(key_path)
     actors_cfg = load_actors_config(root / "config" / "actors.json")
     ledger_db = root / "ledger.db"
 
@@ -70,7 +76,7 @@ def run_full_demo(base_dir: Path | str = ".", clean_run: bool = False, cases_bas
         actor_token=token_owner,
         decision="APPROVED",
         amount="30000.00",
-        key_file=root / "config" / "signing.key",
+        key_file=key_path,
         config_file=root / "config" / "actors.json",
     )
     assert app_a["approved_amount"] == "30000.00"
@@ -84,7 +90,7 @@ def run_full_demo(base_dir: Path | str = ".", clean_run: bool = False, cases_bas
         base_dir=root,
         with_approval=Path(app_a["receipt_file"]),
         require_approval=True,
-        signing_key_file=root / "config" / "signing.key",
+        signing_key_file=key_path,
         ledger_db=ledger_db,
     )
     assert p_a2["approval_verified"] is True
@@ -117,7 +123,7 @@ def run_full_demo(base_dir: Path | str = ".", clean_run: bool = False, cases_bas
         actor_token=token_owner,
         decision="APPROVED",
         amount="60000.00",
-        key_file=root / "config" / "signing.key",
+        key_file=key_path,
         config_file=root / "config" / "actors.json",
     )
     assert app_b["approved_amount"] == "60000.00"
@@ -130,7 +136,7 @@ def run_full_demo(base_dir: Path | str = ".", clean_run: bool = False, cases_bas
         base_dir=root,
         with_approval=Path(app_b["receipt_file"]),
         require_approval=True,
-        signing_key_file=root / "config" / "signing.key",
+        signing_key_file=key_path,
         ledger_db=ledger_db,
     )
     assert p_b2["approval_verified"] is True
@@ -182,7 +188,7 @@ def run_full_demo(base_dir: Path | str = ".", clean_run: bool = False, cases_bas
             case_dir=case_d_dir,
             actor_token=token_owner,
             decision="APPROVED",
-            key_file=root / "config" / "signing.key",
+            key_file=key_path,
             config_file=root / "config" / "actors.json",
         )
     except ToolError as exc:
@@ -211,7 +217,7 @@ def run_full_demo(base_dir: Path | str = ".", clean_run: bool = False, cases_bas
         actor_token=token_owner,
         decision="APPROVED",
         amount="30000.00",
-        key_file=root / "config" / "signing.key",
+        key_file=key_path,
         config_file=root / "config" / "actors.json",
     )
     receipt_e = Path(app_e["receipt_file"])
@@ -230,7 +236,7 @@ def run_full_demo(base_dir: Path | str = ".", clean_run: bool = False, cases_bas
             base_dir=root,
             with_approval=receipt_e,
             require_approval=True,
-            signing_key_file=root / "config" / "signing.key",
+            signing_key_file=key_path,
             ledger_db=ledger_db,
         )
     except ToolError as exc:
@@ -285,11 +291,11 @@ def run_full_demo(base_dir: Path | str = ".", clean_run: bool = False, cases_bas
     pkg_report = export_case_audit(
         case_dir=case_b_dir,
         ledger_db=ledger_db,
-        key_file=root / "config" / "signing.key",
+        key_file=key_path,
     )
     pkg_valid, pkg_issues = verify_package_integrity(
         package_dir=pkg_report["target_package_directory"],
-        key_file=root / "config" / "signing.key",
+        key_file=key_path,
     )
     assert pkg_valid is True
     assert len(pkg_issues) == 0
