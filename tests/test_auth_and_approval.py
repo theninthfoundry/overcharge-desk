@@ -157,7 +157,7 @@ def test_valid_approval_receipt_lifecycle(signing_key):
     body = build_receipt_body(
         case_id="OC-20261106-01",
         invoice_number="INV-1103",
-        invoice_sha256="22d395d2a0f513f2675d40725c63ff60b4a10e62fdb16dbb2d5110742ab7bea6",
+        invoice_sha256="2c7d4c457e0b1d3f59092f997676589139738a89843c30da25824f1fbfe54543",
         contract_id="ACME-2026-01",
         compare_sha256="abcdef" * 10 + "1234",
         evidence_digest_set={"EV-1": "0123" * 16},
@@ -185,7 +185,7 @@ def test_receipt_fails_if_amount_tampered(signing_key):
     body = build_receipt_body(
         case_id="OC-20261106-01",
         invoice_number="INV-1103",
-        invoice_sha256="22d395d2a0f513f2675d40725c63ff60b4a10e62fdb16dbb2d5110742ab7bea6",
+        invoice_sha256="2c7d4c457e0b1d3f59092f997676589139738a89843c30da25824f1fbfe54543",
         contract_id="ACME-2026-01",
         compare_sha256="abcdef" * 10 + "1234",
         evidence_digest_set={},
@@ -210,7 +210,7 @@ def test_receipt_fails_on_cross_case_binding(signing_key):
     body = build_receipt_body(
         case_id="OC-20261106-01",
         invoice_number="INV-1103",
-        invoice_sha256="22d395d2a0f513f2675d40725c63ff60b4a10e62fdb16dbb2d5110742ab7bea6",
+        invoice_sha256="2c7d4c457e0b1d3f59092f997676589139738a89843c30da25824f1fbfe54543",
         contract_id="ACME-2026-01",
         compare_sha256="abcdef" * 10 + "1234",
         evidence_digest_set={},
@@ -234,7 +234,7 @@ def test_rejection_receipt_requires_reason(signing_key):
         build_receipt_body(
             case_id="OC-20261106-01",
             invoice_number="INV-1103",
-            invoice_sha256="22d395d2a0f513f2675d40725c63ff60b4a10e62fdb16dbb2d5110742ab7bea6",
+            invoice_sha256="2c7d4c457e0b1d3f59092f997676589139738a89843c30da25824f1fbfe54543",
             contract_id="ACME-2026-01",
             compare_sha256="abcdef" * 10 + "1234",
             evidence_digest_set={},
