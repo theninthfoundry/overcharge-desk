@@ -5,3 +5,4 @@ from domain.cases.models import CaseDetail, CaseSummary
 from domain.cases.service import CaseService
 
 __all__ = ["CaseDetail", "CaseSummary", "CaseService"]
+

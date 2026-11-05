@@ -36,3 +36,4 @@ class CaseDetail(CaseSummary):
     lines_count: int = 0
     overcharge_detected: bool = False
     audit_package_exported: bool = False
+
