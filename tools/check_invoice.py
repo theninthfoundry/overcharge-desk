@@ -25,6 +25,7 @@ SHA_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 def find_issues(inv: dict, base_dir: Path | str | None = None) -> list[str]:
+    # Pure Inspection: Validates structure and arithmetic parity without modifying source facts
     issues: list[str] = []
     
     # 1. Top-level required fields
