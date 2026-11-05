@@ -82,7 +82,7 @@ def get_connection(db_path: Path | str = DEFAULT_LEDGER_DB) -> sqlite3.Connectio
 
 
 def init_db(db_path: Path | str = DEFAULT_LEDGER_DB) -> None:
-    """Initialize audit ledger schema."""
+    """Initialize audit ledger schema and append-only database triggers."""
     conn = get_connection(db_path)
     with conn:
         conn.execute("""
@@ -102,6 +102,22 @@ def init_db(db_path: Path | str = DEFAULT_LEDGER_DB) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_events_case ON audit_events (case_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_events_seq ON audit_events (event_sequence);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON audit_events (event_type);")
+
+        # Database triggers: append-only enforcement
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS trg_prevent_audit_update
+            BEFORE UPDATE ON audit_events
+            BEGIN
+                SELECT RAISE(ABORT, 'Audit ledger is append-only: updates are prohibited');
+            END;
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS trg_prevent_audit_delete
+            BEFORE DELETE ON audit_events
+            BEGIN
+                SELECT RAISE(ABORT, 'Audit ledger is append-only: deletions are prohibited');
+            END;
+        """)
     conn.close()
 
 
@@ -343,6 +359,108 @@ def verify_ledger(db_path: Path | str = DEFAULT_LEDGER_DB) -> tuple[bool, list[s
         conn.close()
 
 
+def create_checkpoint(
+    db_path: Path | str = DEFAULT_LEDGER_DB,
+    key_bytes: Optional[bytes] = None,
+    checkpoint_out_path: Optional[Path | str] = None,
+) -> dict:
+    """Create an HMAC-signed checkpoint of the audit ledger."""
+    valid, issues = verify_ledger(db_path)
+    if not valid:
+        raise ToolError(f"Cannot checkpoint compromised ledger: {'; '.join(issues)}", 2)
+
+    events = list_events(db_path=db_path)
+    total_events = len(events)
+    if total_events == 0:
+        raise ToolError("Cannot checkpoint empty ledger", 2)
+
+    highest_sequence = events[-1]["event_sequence"]
+    head_event_hash = events[-1]["event_hash"]
+
+    # Compute chained digest over all event hashes in sequence
+    chain_hasher = hashlib.sha256()
+    for ev in events:
+        chain_hasher.update(ev["event_hash"].encode("utf-8"))
+    chain_digest = chain_hasher.hexdigest()
+
+    timestamp = utc_now_iso()
+    compact_ts = timestamp.replace("-", "").replace(":", "").replace("Z", "")
+    checkpoint_id = f"CHK-{compact_ts}-{highest_sequence}"
+
+    body = {
+        "checkpoint_version": "1.0.0",
+        "checkpoint_id": checkpoint_id,
+        "timestamp": timestamp,
+        "total_events": total_events,
+        "highest_sequence": highest_sequence,
+        "head_event_hash": head_event_hash,
+        "chain_digest": chain_digest,
+    }
+
+    if key_bytes:
+        import hmac
+        body_canon = canonical_json_bytes(body)
+        sig = hmac.new(key_bytes, body_canon, hashlib.sha256).hexdigest()
+        body["signature"] = sig
+
+    if checkpoint_out_path:
+        out_p = Path(checkpoint_out_path)
+        from common import write_json_atomic
+        write_json_atomic(out_p, body)
+
+    return body
+
+
+def verify_checkpoint(
+    checkpoint: dict,
+    db_path: Path | str = DEFAULT_LEDGER_DB,
+    key_bytes: Optional[bytes] = None,
+) -> tuple[bool, list[str]]:
+    """Verify that a signed checkpoint matches the actual database state."""
+    issues: list[str] = []
+    if not isinstance(checkpoint, dict):
+        return False, ["Checkpoint must be a JSON object"]
+
+    # Verify signature if key provided
+    if key_bytes:
+        import hmac
+        sig = checkpoint.get("signature")
+        if not sig:
+            issues.append("Missing checkpoint signature")
+        else:
+            body_copy = {k: v for k, v in checkpoint.items() if k != "signature"}
+            expected_sig = hmac.new(key_bytes, canonical_json_bytes(body_copy), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(sig.lower(), expected_sig.lower()):
+                issues.append("Checkpoint signature mismatch (invalid key or tampered checkpoint)")
+
+    # Verify database state up to checkpoint sequence
+    events = list_events(db_path=db_path)
+    seq = checkpoint.get("highest_sequence", 0)
+    matching_events = [e for e in events if e["event_sequence"] <= seq]
+
+    if not matching_events:
+        issues.append(f"No events in ledger up to sequence {seq}")
+        return False, issues
+
+    last_ev = matching_events[-1]
+    if last_ev["event_hash"] != checkpoint.get("head_event_hash"):
+        issues.append(
+            f"Checkpoint head hash mismatch: ledger has {last_ev['event_hash']} != checkpoint {checkpoint.get('head_event_hash')}"
+        )
+
+    chain_hasher = hashlib.sha256()
+    for ev in matching_events:
+        chain_hasher.update(ev["event_hash"].encode("utf-8"))
+    chain_digest = chain_hasher.hexdigest()
+
+    if chain_digest != checkpoint.get("chain_digest"):
+        issues.append(
+            f"Checkpoint chain digest mismatch: ledger has {chain_digest} != checkpoint {checkpoint.get('chain_digest')}"
+        )
+
+    return len(issues) == 0, issues
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -364,6 +482,12 @@ def main() -> int:
 
     ver_cmd = sub.add_parser("verify", help="Verify ledger cryptographic hash chain")
     ver_cmd.add_argument("--db", default=str(DEFAULT_LEDGER_DB))
+
+    chk_cmd = sub.add_parser("checkpoint", help="Generate or verify a trusted ledger checkpoint")
+    chk_cmd.add_argument("--db", default=str(DEFAULT_LEDGER_DB))
+    chk_cmd.add_argument("--out", help="Output path for checkpoint JSON")
+    chk_cmd.add_argument("--key-file", help="Path to signing key file")
+    chk_cmd.add_argument("--verify", help="Verify given checkpoint JSON file against database")
 
     args = ap.parse_args()
 
@@ -404,6 +528,20 @@ def main() -> int:
         valid, issues = verify_ledger(args.db)
         emit({"ok": valid, "valid": valid, "issues": issues})
         return 0 if valid else 2
+
+    elif args.cmd == "checkpoint":
+        from auth import load_signing_key
+        key_bytes = load_signing_key(args.key_file) if args.key_file else None
+
+        if args.verify:
+            chk_data = load_json(args.verify)
+            ok, issues = verify_checkpoint(chk_data, db_path=args.db, key_bytes=key_bytes)
+            emit({"ok": ok, "checkpoint_valid": ok, "issues": issues})
+            return 0 if ok else 2
+
+        chk = create_checkpoint(db_path=args.db, key_bytes=key_bytes, checkpoint_out_path=args.out)
+        emit({"ok": True, "action": "checkpoint_created", "checkpoint": chk})
+        return 0
 
     return 2
 
