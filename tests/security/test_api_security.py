@@ -37,6 +37,15 @@ def test_security_headers_on_404_response():
     assert "X-Request-ID" in res.headers
 
 
+def test_inbound_x_request_id_preserved():
+    """Verify an upstream X-Request-ID passed by reverse proxy is preserved and echoed."""
+    custom_id = "trace-custom-uuid-12345678"
+    res = client.get("/api/v1/health", headers={"X-Request-ID": custom_id})
+    assert res.status_code == 200
+    assert res.headers.get("X-Request-ID") == custom_id
+
+
+
 
 def test_login_brute_force_lockout():
     """Verify account is locked out after consecutive failed login attempts."""
