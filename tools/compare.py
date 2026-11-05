@@ -34,6 +34,7 @@ def vendor_matches(invoice: dict, vendor: dict) -> bool:
 
 
 def candidate_item_keys(description: str, rates: list) -> set:
+    # Boundary Matching: Word-boundary SKU matching preventing substring false positives
     """Contract items this invoice description could mean (by exact label or SKU)."""
     n = norm(description)
     keys = set()
