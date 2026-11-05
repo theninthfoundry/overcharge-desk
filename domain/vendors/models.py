@@ -7,6 +7,13 @@ from typing import Any, Dict, Optional
 
 @dataclass
 class VendorDestination:
+    """Pre-verified corporate treasury bank routing record.
+    
+    Security Invariant:
+    - Invoices extracted from text or OCR are untrusted source documents.
+    - Vendor banking destinations must NEVER be blindly adopted from invoice text (anti-BEC defense).
+    - Destinations must be pre-verified by Treasury with an audit evidence digest.
+    """
     vendor_id: str
     destination_reference: str  # Masked bank account / remittance routing
     verification_status: str    # "VERIFIED", "UNVERIFIED", "DISPUTED"
@@ -46,3 +53,4 @@ class VendorRegistry:
     def is_destination_verified(self, vendor_id: str) -> bool:
         dest = self.get_destination(vendor_id)
         return dest is not None and dest.verification_status == "VERIFIED"
+
