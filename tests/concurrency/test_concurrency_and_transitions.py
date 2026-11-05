@@ -118,4 +118,15 @@ def test_invalid_transition_from_blocked(case_file):
         )
 
 
+def test_version_increments_monotonically(case_file):
+    """Verify version numbers strictly increment on every transition."""
+    v1 = CaseLifecycleManager.transition(case_file, CaseState.RECONCILIATION_RUNNING, "op", "start")
+    assert v1["version"] == 2
+    v2 = CaseLifecycleManager.transition(case_file, CaseState.VERIFIED, "sys", "ok")
+    assert v2["version"] == 3
+    v3 = CaseLifecycleManager.transition(case_file, CaseState.AWAITING_APPROVAL, "sys", "ready")
+    assert v3["version"] == 4
+
+
+
 
