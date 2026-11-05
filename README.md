@@ -1,14 +1,50 @@
 # Overcharge Desk 🔍⚡
 
-> **Deterministic, Evidence-First Vendor Reconciliation & Cryptographic Payment Control**  
-> Verifies commercial invoices against contracts with exact decimal arithmetic, binds human approvals to immutable cryptographic evidence receipts, logs append-only event chains in a tamper-evident SQLite ledger, and strictly prevents unauthorized or unverified payment recommendations.
+> **Multi-Agent Invoice Reconciliation on Switch & Mattermost with Cryptographic Payment Control**  
+> An autonomous three-agent team (**Reader**, **Auditor**, **Writer**) operating in a **Switch / Mattermost** collaborative room that detects vendor overcharges, recalls past vendor billing discrepancies, prevents unauthorized payment recommendations with exact decimal arithmetic, and binds human financial approvals to immutable cryptographic evidence receipts.
 
-[![Tests](https://img.shields.io/badge/Tests-211%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-227%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
+[![Switch](https://img.shields.io/badge/Switch-Mattermost%20Multi--Agent-blueviolet?style=for-the-badge)](SWITCH_SETUP.md)
 [![Python](https://img.shields.io/badge/Python-3.9%20|%203.10%20|%203.11%20|%203.12%20|%203.13-blue?style=for-the-badge&logo=python)](https://python.org)
 [![Arithmetic](https://img.shields.io/badge/Arithmetic-Exact%20Decimal%20(No%20Floats)-brightgreen?style=for-the-badge)](AGENTS.md)
 [![Security](https://img.shields.io/badge/Security-Fail--Closed%20Argon2id%20&%20RBAC-red?style=for-the-badge)](docs/SECURITY_MODEL.md)
 [![Ledger](https://img.shields.io/badge/Ledger-Tamper--Evident%20SHA--256%20Chain-blueviolet?style=for-the-badge)](tools/audit_ledger.py)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+
+---
+
+## ⚡ The Switch Multi-Agent Architecture
+
+Overcharge Desk is purpose-built for **Switch** and **Mattermost**. Instead of relying on a single, fallible LLM that attempts to extract, compute, and authorize payments simultaneously, Overcharge Desk orchestrates three specialized agents inside a shared Mattermost room (`#overcharge-desk`).
+
+The agents interact exclusively with the deterministic engine via the unified CLI (`tools/desk.py`), while financial authorization is mechanically isolated to the human business owner via an out-of-band interactive terminal tool (`tools/approve.py`):
+
+```
+                   Mattermost Room (#overcharge-desk)
+             ┌─────────────────────┼─────────────────────┐
+             ▼                     ▼                     ▼
+      [ READER AGENT ]     [ AUDITOR AGENT ]     [ WRITER AGENT ]
+      (tools/desk.py        (tools/desk.py        (tools/desk.py
+       intake)               audit, history)       finalize)
+             │                     │                     │
+             └─────────────────────┼─────────────────────┘
+                                   ▼
+                      [ DETERMINISTIC ENGINE ]
+                    Exact Decimals | Stage 8 Math
+                                   │
+                                   ▼
+                      [ HUMAN APPROVAL GATE ]
+                 (tools/approve.py via Owner TTY)
+```
+
+### Agent Roles & Security Invariants
+
+| Participant | Platform / Tool | Command-Line Interface | Role & Boundaries |
+|---|---|---|---|
+| **Reader Agent** | Claude Code | `tools/desk.py intake` | Ingests vendor invoices and contracts, verifies basic line arithmetic, preserves immutable source SHA-256 fingerprints in `evidence_registry.json`. Never judges or infers. |
+| **Auditor Agent** | OpenAI Codex | `tools/desk.py audit`<br>`tools/desk.py history` | Runs deterministic contract rate comparison, executes independent Stage 8 verification (`verification.json`), recalls vendor dispute history across all cases (the memory moment). **Has no approval command.** |
+| **Writer Agent** | Claude Code | `tools/desk.py finalize` | Awaits human owner approval receipt, verifies cryptographic signature and artifact hashes, releases `corrected_payment.csv`, drafts dispute email. **Fails closed if unapproved.** |
+| **Owner (Human)** | Interactive Terminal | `tools/approve.py` | Out-of-band authorization requiring Argon2id password verification in an interactive TTY session. Produces a 64-char SHA-256 receipt hash that the owner posts into the Switch room. |
 
 ---
 
@@ -33,7 +69,7 @@ Small and medium enterprises lose **3% to 7% of direct spend** to invoice errors
 
 ---
 
-## 🏗 System Architecture & 13-Stage Pipeline
+## 🏗 13-Stage Deterministic Reconciliation Pipeline
 
 ```
                          [ INCOMING INVOICE ]
@@ -79,195 +115,128 @@ Small and medium enterprises lose **3% to 7% of direct spend** to invoice errors
                ┌───────────────────────────┐
                │ Tamper-Evident Ledger     │ (tools/audit_ledger.py)
                │ Append-Only Triggers      │
-               │ Signed Checkpoints        │
+               │ Cryptographic Hash Chain  │
+               │ Standalone Case Audit Pkg │ (tools/export_audit_package.py)
                └────────────┬──────────────┘
-                            │
+                            │ (Only with verified signed receipt)
                             ▼
-               corrected_payment.csv
-               (Authorized contract rates & withheld overcharges)
-                            │
-                            ▼
-               Stage 13: Execution Manifest (manifest.json)
-               Standalone Audit Package Export (tools/export_audit_package.py)
+               ┌───────────────────────────┐
+               │ Corrected Payment Sheet   │ (corrected_payment.csv)
+               │ Withheld Overcharges      │
+               │ Dispute Email Draft       │ (dispute_email.md)
+               └───────────────────────────┘
 ```
 
 ---
 
-## 🛡 Core Engineering Invariants (AGENTS.md)
+## 🛠 Command-Line Interface Reference
 
-| Category | Invariant | Mechanical Enforcement |
-|---|---|---|
-| **Financial** | Mandatory Exact Decimal Arithmetic | `decimal.Decimal` with `ROUND_HALF_UP` on every line; floats raise `TypeError` or `ToolError`. |
-| **Financial** | Source Invoice Truth Preservation | Source extracted values are never silently rounded or normalized to force passing. |
-| **Financial** | Discrepancy Quarantine | Internal arithmetic errors ($Qty \times Price \neq LineTotal$) trigger `STATUS_SOURCE_DISCREPANCY` and set system to `BLOCKED`. |
-| **Financial** | Recommendation vs Execution | Verified outputs are authorized recommendations; actual banking disbursement is strictly separated. |
-| **Evidence** | Universal Source Referencing | Every line item and variance references immutable locators (`invoices/acme-inv-1103.txt#line-1`). |
-| **Evidence** | Cryptographic Fingerprinting | Raw source artifacts are fingerprinted with full 64-character SHA-256 digests upon registration. |
-| **Security** | Fail-Closed Authorization | Missing, stale, or unauthenticated identities cause immediate refusal with exit code 4. |
-| **Security** | Full 64-char Hash Digest Requirement | Shortened hash prefixes (e.g. 8-char) are rejected. Receipts bind all artifact digests into HMAC signatures. |
-| **Ledger** | Tamper-Evident Hash Chain | Each event incorporates `previous_event_hash` in its canonical SHA-256 digest, starting from genesis. |
-| **Ledger** | Database-Level Append-Only Triggers | SQLite triggers prevent direct `UPDATE` and `DELETE` on historical audit events. |
+### 1. Unified Agent CLI (`tools/desk.py`)
 
----
+All three AI agents operate through `tools/desk.py`. **The CLI strictly omits an `approve` subcommand**, ensuring agents cannot authorize payments:
 
-## 🚀 Quickstart & Installation
-
-### Requirements
-- Python 3.9+ (Standard Library only for core verification; no external runtime dependencies).
-- `pytest` for running the automated test suite.
-
-### Setup
 ```bash
-# Clone the repository
-git clone https://github.com/theninthfoundry/overcharge-desk.git
-cd overcharge-desk
+# 1. Reader Agent: Intake invoice and contract into a case folder
+python tools/desk.py intake invoices/acme-inv-1103.txt seed/acme.json --case-id demo-overcharge
 
-# Install test dependencies
-pip install -r requirements-dev.txt
+# 2. Auditor Agent: Run deterministic contract audit & emit pre-approval preview
+python tools/desk.py audit demo-overcharge
 
-# Run full test suite (154 tests)
-python -m pytest -v
+# 3. Auditor Agent: Query vendor history across all cases (The Memory Moment)
+python tools/desk.py history --vendor acme
+
+# 4. Any Agent: Inspect 4-dimensional case status
+python tools/desk.py status demo-overcharge
+
+# 5. Writer Agent: Finalize and release corrected payment sheet (requires signed receipt)
+python tools/desk.py finalize demo-overcharge
 ```
 
----
+### 2. Interactive Terminal Owner Approval (`tools/approve.py`)
 
-## 🧪 The Six Canonical Benchmark Demo Cases
+Financial authorization is strictly performed by the human owner in an interactive terminal session:
 
-Overcharge Desk includes 6 benchmark test cases demonstrating the complete lifecycle and failure modes:
-
-| Case | Directory | Invoice | Invoiced | Payable | Withheld | State | Result |
-|---|---|---|---|---|---|---|---|
-| **Case A** | `cases/demo-clean` | INV-1001 | ₹30,000.00 | ₹30,000.00 | ₹0.00 | `VERIFIED` | Clean payment sheet + approval receipt |
-| **Case B** | `cases/demo-overcharge` | INV-1103 | ₹66,000.00 | ₹60,000.00 | ₹6,000.00 | `VERIFIED` | Corrected payment sheet (₹6k withheld) + Audit Package |
-| **Case C** | `cases/demo-review` | INV-1201 | ₹54,500.00 | N/A | N/A | `REVIEW_REQUIRED` | Partial review artifact (investigation only) |
-| **Case D** | `cases/demo-blocked` | INV-1301 | ₹68,000.00 | N/A | N/A | `BLOCKED` | Discrepancy report; gateway strictly refuses approval |
-| **Case E** | `cases/demo-tampering` | INV-1001 | ₹30,000.00 | Refused | Refused | `TAMPERED` | Post-approval modification detected; payment refused fail-closed |
-| **Case F** | `cases/demo-ledger-failure` | INV-1001 | ₹30,000.00 | Refused | Refused | `ABORTED` | Unwriteable ledger causes immediate fail-closed pipeline abort |
-
-### Running the End-to-End Demo Suite
 ```bash
-python tools/run_demo_suite.py --clean
+# Run interactive approval CLI (refuses non-TTY execution and piped scripts)
+python tools/approve.py demo-overcharge --username owner
 ```
 
----
+- Prompts for owner password using `getpass` (Argon2id verification).
+- Computes exact payable amounts server-side from `compare.json`.
+- Issues signed cryptographic approval receipt (`cases/<case_id>/approvals/approval_receipt.json`).
+- Outputs full 64-character SHA-256 receipt hash formatted for posting to the Switch room.
 
-## 🧰 CLI Tool Reference
+### 3. Authentication & Key Management Lockdown (`tools/auth.py`)
 
-### 1. Invoice Validation (`tools/check_invoice.py`)
-Validates schema structure, source file presence, and mathematical parity:
 ```bash
-python tools/check_invoice.py cases/demo-overcharge/invoice.json --strict
+# CLI token minting is strictly locked down (fails closed without --dev)
+python tools/auth.py issue-token owner         # Exits code 4: Refused
+
+# Explicit development testing flag
+python tools/auth.py issue-token owner --dev   # Issues temporary token
 ```
 
-### 2. Rate Comparison Engine (`tools/compare.py`)
-Deterministic contract rate verification (schema 2.0.0) with commercial status categorization:
+### 4. Standalone Audit Package Exporter (`tools/export_audit_package.py`)
+
 ```bash
-python tools/compare.py cases/demo-overcharge/invoice.json vendors/acme.json --out compare.json --save-digest
-```
-
-### 3. Independent Verification Engine (`tools/validate_comparison.py`)
-Independent auditor verifying math down to the byte and generating formal `verification.json`:
-```bash
-python tools/validate_comparison.py compare.json --out-verification verification.json --strict
-```
-
-### 4. Actor Model & Token Authentication (`tools/auth.py`)
-Issues and validates HMAC-SHA-256 tokens for role-based access:
-```bash
-# Issue 5-minute token for owner
-python tools/auth.py issue-token owner
-
-# Verify token validity
-python tools/auth.py verify-token "<token>"
-```
-
-### 5. Authorization Gateway (`tools/approval_gateway.py`)
-Enforces strict positive allowlist, re-verifies evidence on disk, and signs approval receipts:
-```bash
-# Approve case with exact payable amount check
-python tools/approval_gateway.py approve cases/demo-overcharge --token "<owner_token>" --amount 60000.00
-
-# Reject case with required owner rationale
-python tools/approval_gateway.py reject cases/demo-overcharge --token "<owner_token>" --reason "Supplier agreed to reissue"
-```
-
-### 6. Tamper-Evident SQLite Ledger (`tools/audit_ledger.py` & `tools/verify_ledger.py`)
-Append-only cryptographic event logging and signed checkpoints:
-```bash
-# Create HMAC-signed checkpoint
-python tools/audit_ledger.py checkpoint --out checkpoint.json --key-file config/signing.key
-
-# Verify complete hash chain and checkpoint
-python tools/verify_ledger.py --strict --checkpoint checkpoint.json --key-file config/signing.key
-```
-
-### 7. Controlled Pipeline Orchestrator (`tools/pipeline.py`)
-Runs the full 13-stage controlled reconciliation flow:
-```bash
-# Pass 1: Pre-approval preview (outputs payment_preview.csv)
-python tools/pipeline.py cases/demo-overcharge/invoice.json vendors/acme.json cases/demo-overcharge/
-
-# Pass 2: Authorized payment release (requires signed receipt)
-python tools/pipeline.py cases/demo-overcharge/invoice.json vendors/acme.json cases/demo-overcharge/ --require-approval
-```
-
-### 8. Standalone Audit Package Exporter (`tools/export_audit_package.py`)
-Exports self-contained evidence bundles certified by cryptographic integrity reports:
-```bash
-# Export case audit package
+# Export self-contained audit bundle with integrity manifest
 python tools/export_audit_package.py export cases/demo-overcharge
 
-# Verify package integrity independently
+# Verify package cryptographic integrity independently
 python tools/export_audit_package.py verify case_audit/OC-20261106-01
 ```
 
 ---
 
-## 📊 Test Suite & Verification Matrix
+## 📊 Automated Test Suite & Verification Matrix
 
-The test suite covers **186 automated test cases** across 17 test modules:
+The test suite covers **227 automated test scenarios** across 21 test modules, with full cross-platform compatibility verified across Windows, Ubuntu, and Python 3.9–3.13:
 
 ```text
-tests/test_api.py                                      10 passed (FastAPI endpoints, auth, cases, artifacts, audit, vendors)
-tests/test_audit_ledger.py                             11 passed (Genesis, hash links, triggers, tampering, checkpoints)
+tests/concurrency/test_concurrency_and_transitions.py   6 passed (Optimistic locking, rollback, version race)
+tests/payments/test_payment_instructions.py             6 passed (Instruction lifecycle, single export, audit trail)
+tests/payments/test_vendor_registry.py                  2 passed (Verified bank account gates, unverified block)
+tests/security/test_api_security.py                     7 passed (Security headers, CSP, brute-force lockout, generic auth)
+tests/security/test_bootstrap_admin.py                  4 passed (Interactive getpass, demo seed isolation, duplicate block)
+tests/security/test_identity_repository.py              3 passed (Argon2id persistence, session tokens, audit logging)
+tests/security/test_key_manager.py                      7 passed (Key rotation, retirement, revocation, production gates)
+tests/security/test_operational_health.py               4 passed (LIVE, READY, DEGRADED probes, component health)
+tests/security/test_password_security.py                8 passed (Argon2id hashing, bounds checking, constant-time compare)
+tests/security/test_storage_security.py                 9 passed (Path traversal guards, symlink containment, 10MB limits)
+tests/test_api.py                                      10 passed (FastAPI endpoints, auth, cases, artifacts, audit)
+tests/test_approve_cli.py                               6 passed (TTY enforcement, Argon2id auth, 64-char receipt hash)
+tests/test_audit_ledger.py                             11 passed (Genesis block, triggers, tamper detection, checkpoints)
 tests/test_auth_and_approval.py                        15 passed (HMAC tokens, TTL, role permissions, signed receipts)
-tests/test_boundary_audit.py                           20 passed (4-tier routing, path traversal, injection, digests)
+tests/test_boundary_audit.py                           20 passed (4-tier routing, path traversal, injection prevention)
 tests/test_case_manager_and_evidence.py                 8 passed (Directory layout, state transitions, SHA-256 tracking)
-tests/test_compare.py                                  21 passed (Decimal precision, rounding, SKU boundaries, dates)
+tests/test_compare.py                                  21 passed (Decimal precision, half-up rounding, SKU boundaries)
+tests/test_demo_cases.py                                1 passed (Full 6-case benchmark & package export suite)
+tests/test_desk_cli.py                                  9 passed (Agent CLI, no approve command, memory moment, key isolation)
 tests/test_financial_adversarial.py                    35 passed (Invalid numbers, negative quantities, formula injection)
 tests/test_pipeline_orchestration.py                    3 passed (Execution manifests, approval enforcement, recovery)
 tests/test_rbac_and_separation_of_duties.py            5 passed (Separation of duties, allowlists, token lifecycle)
 tests/test_tools.py                                    25 passed (CLI utilities, error exits, seed parity)
-tests/test_demo_cases.py                                1 passed (Full 6-case end-to-end benchmark & export suite)
-tests/concurrency/test_concurrency_and_transitions.py   3 passed (Optimistic concurrency, version checks, lifecycle graph)
-tests/payments/test_payment_instructions.py             4 passed (Payment instructions, single export, unverified bank block)
-tests/security/test_api_security.py                    5 passed (Security headers, CSP, brute-force lockout, generic auth)
-tests/security/test_bootstrap_admin.py                  3 passed (Interactive CLI bootstrap, demo seed isolation)
-tests/security/test_key_manager.py                      4 passed (Key lifecycle, retirement, revocation, rotation)
-tests/security/test_operational_health.py               3 passed (LIVE, READY, and DEGRADED operational health probes)
-tests/security/test_password_security.py                5 passed (Argon2id hashing, bounds checking, constant-time compare)
-tests/security/test_storage_security.py                 5 passed (Path traversal guards, symlink containment, 10MB limits)
 -------------------------------------------------------------------------------------------------------------------------
-TOTAL: 186 passed, 1 skipped in ~20 seconds
+TOTAL: 227 passed, 1 skipped in ~12 seconds
 ```
 
 ---
 
-## 🔒 Security, Trust Boundaries & Honest Immutability Disclosures
+## 🔒 Security, Trust Boundaries & Honest Disclosures
 
 > [!IMPORTANT]
+> - **Same OS User Filesystem Access vs. Container Boundaries**:
+>   When agents run under the same OS user process on a single workstation, they share operating system filesystem access. True multi-tenant isolation requires distinct OS users or containerized sandboxes per agent. To enforce separation of concerns, signing keys are provisioned outside the repository tree via `OVERCHARGE_KEY_DIR` / `OVERCHARGE_SIGNING_KEY`, agent token minting via `tools/auth.py issue-token` is locked down with fail-closed errors, and `tools/desk.py` contains no `approve` subcommand.
 > - **What HMAC-SHA-256 Signatures Prove and Do Not Prove**:
->   - **Proves**: That the token, receipt, or checkpoint was generated with knowledge of the provisioning key (`config/signing.key`), and that bound artifact digests (`invoice_sha256`, `compare_sha256`, `verification_id`, `evidence_digest_set`) have not been altered since signing.
->   - **Does Not Prove**: HMAC is a symmetric cryptographic construction; it does **not** provide public-key non-repudiation or independently verify physical user identity. In enterprise production, HMAC tokens are paired with an authenticated OIDC provider and server-side session controls.
+>   - **Proves**: That the token, receipt, or checkpoint was generated with knowledge of the provisioned secret key, and that bound artifact digests (`invoice_sha256`, `compare_sha256`, `verification_id`, `evidence_digest_set`) have not been modified since signing.
+>   - **Does Not Prove**: HMAC is a symmetric cryptographic construction; it does **not** provide public-key non-repudiation or independently verify physical user identity. Human authorization is enforced through the interactive TTY password prompt in `tools/approve.py`.
 > - **Honest Immutability Claims for SQLite Ledger**:
->   - The SQLite database is **tamper-evident**, not physically immutable.
+>   - The SQLite ledger is **tamper-evident**, not physically immutable.
 >   - Append-only behavior is mechanically enforced at runtime via SQLite triggers (`BEFORE UPDATE/DELETE RAISE(ABORT)`).
->   - An attacker with raw disk write access could theoretically rewrite historical rows and recompute hashes forward; therefore, periodic external signed checkpoints (`create_checkpoint`) and exportable audit packages are provided for independent external archiving.
-> - **Distinction Between Recommendation and Payment Execution**:
+>   - Periodic HMAC-signed checkpoints (`create_checkpoint`) and standalone audit packages (`tools/export_audit_package.py`) allow external verifiers to detect any offline database tampering.
+> - **Recommendation vs. Payment Execution**:
 >   - Overcharge Desk produces verified, authorized payment recommendation sheets (`corrected_payment.csv`).
->   - It does **not** execute automated bank transfers or initiate disbursements directly. Actual settlement execution occurs within external banking/ERP systems following human review.
-> - **Spreadsheet Formula Injection Mitigation**:
->   - All CSV exports sanitize leading characters (`=`, `+`, `-`, `@`, `\t`, `\r`) with single quotes to prevent formula execution when opened in Microsoft Excel or Google Sheets.
+>   - It does **not** execute automated bank transfers or initiate disbursements directly. Actual settlement occurs within external banking/ERP systems following human review.
 
 ---
 
