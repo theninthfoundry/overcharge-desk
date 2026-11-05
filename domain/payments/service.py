@@ -49,12 +49,12 @@ class PaymentService:
         inv_p = c_p / "invoice.json"
         vendor_id = load_json(inv_p).get("vendor_id", "acme") if inv_p.exists() else "acme"
 
-        # Check if active instruction already exists for this receipt
+        # Invariant: Single active instruction per approved receipt (double-payment prevention)
         existing = self.repo.get_by_approval_receipt_id(receipt_id)
         if existing:
             return existing
 
-        # Idempotency check
+        # Idempotency check: Client-specified or receipt-derived idempotency key
         idem_key = idempotency_key or f"IDEM-{receipt_id}"
         existing_idem = self.repo.get_by_idempotency_key(idem_key)
         if existing_idem:
