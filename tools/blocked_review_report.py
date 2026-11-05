@@ -32,6 +32,7 @@ def safe_text(value) -> str:
 
 
 def build_blocked_rows(result: dict) -> tuple[list[list[str]], dict]:
+    # Tier 3 Artifact: Discrepancy evidence report containing strictly zero payable fields
     """Build investigative CSV rows from a BLOCKED comparison result."""
     issues = validate_comparison(result)
     if issues:
