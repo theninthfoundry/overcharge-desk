@@ -178,6 +178,7 @@ def issue_actor_token(
 
 
 def verify_actor_token(
+    # Freshness Check: Enforces 300s TTL window and constant-time signature comparison
     token: str,
     key_bytes: bytes,
     max_age_seconds: int = DEFAULT_TOKEN_TTL,
