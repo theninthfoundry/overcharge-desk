@@ -55,3 +55,21 @@ def test_health_check_degraded_on_db_failure(monkeypatch):
     assert data["status"] == "DEGRADED"
     assert data["is_ready"] is False
     assert "Database locked" in data["checks"]["database"]
+
+
+def test_health_check_degraded_on_storage_failure(monkeypatch):
+    """Health check signals DEGRADED when case storage write fails."""
+    from pathlib import Path
+
+    def fail_write_text(self, data):
+        raise OSError("Read-only filesystem")
+
+    monkeypatch.setattr(Path, "write_text", fail_write_text)
+
+    res = client.get("/api/v1/health")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "DEGRADED"
+    assert data["is_ready"] is False
+    assert "ERROR" in data["checks"]["storage"]
+
