@@ -132,3 +132,19 @@ def test_caller_supplied_amount_mismatch_fails(identity_service):
     assert "does not match server-calculated payable amount" in res.json()["detail"]
 
 
+def test_unverified_case_approval_refusal_via_api(identity_service):
+    """Attempting to approve a BLOCKED case via API fails closed."""
+    approver = identity_service.get_user_by_username("approver")
+    token = identity_service.issue_session_token(approver)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res = client.post(
+        "/api/v1/cases/demo-blocked/approve",
+        headers=headers,
+        json={"decision": "APPROVED"},
+    )
+    assert res.status_code in (400, 403)
+    assert "Strict allowlist violation" in res.json()["detail"]
+
+
+
