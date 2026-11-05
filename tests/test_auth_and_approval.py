@@ -93,6 +93,7 @@ def test_actor_token_generation_and_verification(signing_key, actors_config):
 
 
 def test_expired_token_rejected_fail_closed(signing_key, actors_config):
+    # Security Test: Verifies fail-closed rejection of stale/expired HMAC tokens
     _, key_bytes = signing_key
     _, cfg = actors_config
 
