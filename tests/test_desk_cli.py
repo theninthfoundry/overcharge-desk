@@ -134,3 +134,65 @@ def test_no_key_files_under_repository_tree():
     ]
     assert illegal_keys == [], f"Found key files inside repository tree: {illegal_keys}"
     assert illegal_manifests == [], f"Found key manifests inside repository tree: {illegal_manifests}"
+
+
+def test_desk_intake_txt_invoice(tmp_path):
+    """Verify desk.py intake deterministically parses raw .txt tabular invoices into structured invoice.json."""
+    inv_txt = ROOT / "invoices" / "acme-inv-1103.txt"
+    con_json = ROOT / "seed" / "acme.json"
+    c_dir = tmp_path / "cases"
+
+    res = run_intake(
+        invoice_path=inv_txt,
+        contract_path=con_json,
+        case_id="OC-20261105-02",
+        cases_dir=c_dir,
+        base_dir=tmp_path,
+    )
+    assert res["ok"] is True
+    assert res["case_id"] == "OC-20261105-02"
+    generated_inv = Path(res["case_dir"]) / "invoice.json"
+    assert generated_inv.exists()
+
+    inv_data = load_json(generated_inv)
+    assert inv_data["invoice_number"] == "INV-1103"
+    assert inv_data["vendor_name_as_written"] == "Acme Supplies Pvt Ltd"
+    assert len(inv_data["lines"]) == 2
+    assert inv_data["lines"][0]["line_no"] == 1
+    assert inv_data["lines"][0]["quantity"] == 500
+    assert inv_data["lines"][0]["unit_price"] == 112.0
+    assert inv_data["lines"][0]["line_total"] == 56000.0
+    assert "acme-inv-1103.txt, line 1" in inv_data["lines"][0]["source_ref"]
+    assert inv_data["stated_total"] == 66000.0
+
+
+def test_simulate_switch_fast_execution():
+    """Verify tools/simulate_switch.py runs all 4 turns cleanly in fast mode."""
+    res = subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "simulate_switch.py"), "--fast"],
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode == 0
+    output = res.stdout
+    assert "[READER]" in output
+    assert "[AUDITOR]" in output
+    assert "[OWNER]" in output
+    assert "[WRITER]" in output
+    assert "VENDOR MEMORY MOMENT:" in output
+    assert "MULTI-AGENT WORKFLOW COMPLETED SUCCESSFULLY" in output
+
+
+def test_quickstart_cli_runner():
+    """Verify tools/quickstart.py executes benchmark and ledger verification."""
+    res = subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "quickstart.py"), "--no-clean"],
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode == 0
+    output = res.stdout
+    assert "Running 6 Canonical Benchmark Demo Cases..." in output
+    assert "Verifying SQLite Ledger Cryptographic Hash Chain..." in output
+    assert "Chain Integrity:" in output
+    assert "VALID" in output
