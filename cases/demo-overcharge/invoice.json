@@ -10,8 +10,8 @@
       "description": "Corrugated carton, 5-ply (CC-5)",
       "quantity": 500,
       "unit": "unit",
-      "unit_price": 112.00,
-      "line_total": 56000.00,
+      "unit_price": 112.0,
+      "line_total": 56000.0,
       "source_ref": "invoices/acme-inv-1103.txt, line 1"
     },
     {
@@ -19,14 +19,14 @@
       "description": "Pallet wrap roll (PW-1)",
       "quantity": 40,
       "unit": "unit",
-      "unit_price": 250.00,
-      "line_total": 10000.00,
+      "unit_price": 250.0,
+      "line_total": 10000.0,
       "source_ref": "invoices/acme-inv-1103.txt, line 2"
     }
   ],
-  "stated_total": 66000.00,
+  "stated_total": 66000.0,
   "source_file": "invoices/acme-inv-1103.txt",
-  "source_sha256": "22d395d2a0f513f2675d40725c63ff60b4a10e62fdb16dbb2d5110742ab7bea6",
+  "source_sha256": "2c7d4c457e0b1d3f59092f997676589139738a89843c30da25824f1fbfe54543",
   "extraction_issues": [],
   "extracted_at": "2026-11-06T09:00:00Z"
 }
