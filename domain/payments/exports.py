@@ -11,7 +11,11 @@ from payment_sheet import safe_text
 
 
 def export_payment_instruction_csv(instruction: PaymentInstruction) -> str:
-    """Format an authorized payment instruction as an immutable CSV record."""
+    """Format an authorized payment instruction as an immutable CSV record.
+    
+    Formula Injection Defense:
+    - Passes every cell value through safe_text to sanitize formula prefixes (=, +, -, @, \\t, \\r).
+    """
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
@@ -50,3 +54,4 @@ def export_payment_instruction_csv(instruction: PaymentInstruction) -> str:
 
 def export_payment_instruction_json(instruction: PaymentInstruction) -> str:
     return json.dumps(instruction.to_dict(), indent=2, sort_keys=True)
+
