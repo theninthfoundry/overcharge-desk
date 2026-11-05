@@ -202,7 +202,7 @@ python tools/export_audit_package.py verify case_audit/OC-20261106-01
 
 ## 📊 Automated Test Suite & Verification Matrix
 
-The test suite covers **230 automated test scenarios** across 21 test modules, with full cross-platform compatibility verified across Windows, Ubuntu, and Python 3.9–3.13:
+The test suite covers **237 automated test scenarios** across 24 test modules, with full cross-platform compatibility certified across Windows, Ubuntu, and Python 3.9–3.13:
 
 ```text
 tests/concurrency/test_concurrency_and_transitions.py   6 passed (Optimistic locking, rollback, version race)
@@ -225,12 +225,41 @@ tests/test_compare.py                                  21 passed (Decimal precis
 tests/test_demo_cases.py                                1 passed (Full 6-case benchmark & package export suite)
 tests/test_desk_cli.py                                 12 passed (Agent CLI, no approve command, memory moment, txt intake, quickstart, simulator)
 tests/test_financial_adversarial.py                    35 passed (Invalid numbers, negative quantities, formula injection)
+tests/test_health_and_inspect_cli.py                    3 passed (Standalone health probe and receipt inspector CLIs)
 tests/test_pipeline_orchestration.py                    3 passed (Execution manifests, approval enforcement, recovery)
 tests/test_rbac_and_separation_of_duties.py            5 passed (Separation of duties, allowlists, token lifecycle)
+tests/test_seed_demo_cli.py                             1 passed (Seed verification and state reset manager)
 tests/test_tools.py                                    25 passed (CLI utilities, error exits, seed parity)
+tests/test_vendor_memory_mechanics.py                   3 passed (Historical vendor recall & credit note invariants)
 -------------------------------------------------------------------------------------------------------------------------
-TOTAL: 229 passed, 1 skipped in ~15 seconds
+TOTAL: 236 passed, 1 skipped in ~20 seconds
 ```
+
+---
+
+## 📚 Technical Documentation Index
+
+Comprehensive engineering specifications and operational guides:
+- [Hackathon Submission & Judging Brief](docs/HACKATHON_SUBMISSION.md) — 5-minute evaluation guide and architecture overview
+- [Switch & Mattermost Integration Guide](docs/SWITCH_INTEGRATION_GUIDE.md) — Multi-agent room setup, webhooks, and slash commands
+- [Multi-Agent Protocol Specification](docs/MULTI_AGENT_PROTOCOL.md) — Inter-process message schemas and separation of duties
+- [System Architecture Specification](docs/ARCHITECTURE.md) — Decoupled architectural layers and data flows
+- [STRIDE Threat Model & Mitigations](docs/THREAT_MODEL.md) — Formal security analysis and boundary controls
+- [Permanent Invariants Traceability Matrix](docs/INVARIANTS_MATRIX.md) — Mapping AGENTS.md rules to enforcing code and tests
+- [Deterministic Reconciliation Engine](docs/RECONCILIATION_ENGINE.md) — SKU matching, variance taxonomy, and disbursement math
+- [Vendor Historical Memory System](docs/VENDOR_MEMORY_SYSTEM.md) — Cross-invoice recall and credit note state machine
+- [Fail-Closed Verification Architecture](docs/FAIL_CLOSED_VERIFICATION.md) — Zero-default verification and arithmetic quarantining
+- [Argon2id Identity Specification](docs/ARGON2ID_IDENTITY_SPEC.md) — RFC 9106 parameter choices and RBAC matrix
+- [Tamper-Evident Storage Architecture](docs/TAMPER_EVIDENT_STORAGE.md) — SQLite linear hash chains and Merkle integrity
+- [Financial Decimal Policy](docs/FINANCIAL_DECIMAL_POLICY.md) — Exact decimal arithmetic and IEEE 754 float hazard mitigations
+- [Canonical Benchmark Reference](docs/BENCHMARK_CASES.md) — Mathematical specifications for Cases A through F
+- [Operational Runbook](docs/OPERATIONAL_RUNBOOK.md) — Production deployment, key rotation, and disaster recovery
+- [Troubleshooting & Taxonomy](docs/TROUBLESHOOTING.md) — Error code matrix and operational diagnostics
+- [REST API Reference](docs/API_REFERENCE.md) — API endpoints, schemas, and authentication
+- [Developer Onboarding Guide](docs/DEVELOPER_SETUP.md) — Local environment setup, test execution, and coding invariants
+- [Pre-Flight Compliance Checklist](docs/SECURITY_AUDIT_CHECKLIST.md) — AP compliance and security checklist
+- [Frequently Asked Questions](docs/FAQ.md) — Common questions on Switch, precision math, and human gates
+- [Domain Glossary](docs/GLOSSARY.md) — Terminology definitions for Overcharge Desk
 
 ---
 
