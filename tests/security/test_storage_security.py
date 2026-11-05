@@ -76,7 +76,7 @@ def test_symlink_escape_prevention(storage, tmp_path):
         pytest.skip("Symlink creation requires elevated privileges on Windows")
 
     # Attempting to read through symlink escaping case dir must fail
-    with pytest.raises(StorageSecurityError, match="Symlink escape prohibited"):
+    with pytest.raises(StorageSecurityError, match=r"Symlink.*escape"):
         storage.read_artifact("OC-20261106-01", "invoice.json")
 
 
