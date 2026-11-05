@@ -36,6 +36,7 @@ PERMITTED_LINE_VERIFICATION_STATUSES = {
 
 
 def validate_comparison(result: dict, companion_digest_file: Path | str | None = None) -> list[str]:
+    # Independent Auditor: Deep mathematical re-verification of line-level arithmetic parity
     """Inspect a comparison result dictionary for integrity and mathematical consistency.
     
     Returns a list of issue strings. An empty list signifies an authentic, valid result.
