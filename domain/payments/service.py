@@ -115,6 +115,7 @@ class PaymentService:
             content = export_payment_instruction_json(updated_inst).encode("utf-8")
             media_type = "application/json"
         else:
+            # utf-8-sig adds Byte Order Mark (BOM) for seamless UTF-8 decoding in Microsoft Excel
             content = export_payment_instruction_csv(updated_inst).encode("utf-8-sig")
             media_type = "text/csv"
 
