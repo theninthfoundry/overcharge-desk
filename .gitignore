@@ -35,6 +35,7 @@ case_audit/
 *.db-shm
 *.key
 signing.key
+config/keys_manifest.json
 
 # System & Editor files
 .DS_Store
