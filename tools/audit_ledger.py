@@ -133,6 +133,7 @@ def compute_event_hash(
 
 
 def record_event(
+    # Invariant Rule 4.2: Append-only event commit with strict sequence increment
     case_id: str,
     event_type: str,
     actor_id: str,
