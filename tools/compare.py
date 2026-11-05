@@ -186,6 +186,7 @@ def compare(invoice: dict, vendor: dict, base_dir: Path | str | None = None) -> 
                 computed = q2(qty * price)
 
         # Check internal line arithmetic parity: (written == computed)
+        # Invariant Rule 1.4: Discrepancy Quarantine: Qty x Price != LineTotal triggers BLOCKED
         arithmetic_discrepancy = False
         if written is not None and computed is not None:
             if written != computed:
