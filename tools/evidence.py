@@ -261,6 +261,7 @@ def get_evidence(case_dir: Path | str, evidence_id: str) -> dict:
 
 
 def get_evidence_digest_map(case_dir: Path | str) -> dict[str, str]:
+    # Cryptographic Digest Mapping: Extracts full 64-char SHA-256 mapping for approval bindings
     """Return mapping of evidence_id -> content_hash for all registered items."""
     items = list_evidence(case_dir)
     return {
