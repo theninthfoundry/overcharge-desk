@@ -13,7 +13,7 @@ from services.api.schemas import CheckpointResponse, LedgerVerifyResponse
 
 # Directly use existing ledger engine
 from audit_ledger import DEFAULT_LEDGER_DB, create_checkpoint, list_events, verify_checkpoint, verify_ledger
-from auth import load_signing_key
+from auth import get_default_key_path, load_signing_key
 
 router = APIRouter(prefix="/audit", tags=["Audit & Ledger"])
 
@@ -47,7 +47,7 @@ def run_ledger_verification(
 def trigger_checkpoint(
     user: User = Depends(require_permission(PERM_AUDIT_CHECKPOINT)),
 ) -> CheckpointResponse:
-    key_path = Path("config/signing.key")
+    key_path = get_default_key_path()
     key_bytes = load_signing_key(key_path) if key_path.exists() else b"0123456789abcdef0123456789abcdef"
     try:
         chk = create_checkpoint(key_bytes=key_bytes)
