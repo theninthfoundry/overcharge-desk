@@ -76,3 +76,24 @@ def test_multiple_sequential_key_rotations(tmp_path):
         assert km.get_key_by_id(kid) == kbytes
 
 
+def test_hmac_signing_with_historical_key(tmp_path):
+    """Verify HMAC signatures made with a retired key can still be verified."""
+    import hmac
+    km = KeyManager(config_dir=tmp_path, app_env="development")
+    old_id, old_bytes = km.get_active_key()
+    
+    # Sign a payload
+    payload = b"test_payload_for_receipt"
+    sig = hmac.new(old_bytes, payload, "sha256").hexdigest()
+
+    # Rotate active key
+    km.rotate_key("key-new")
+
+    # Verify signature using historical key lookup
+    retrieved_bytes = km.get_key_by_id(old_id)
+    assert retrieved_bytes is not None
+    verified_sig = hmac.new(retrieved_bytes, payload, "sha256").hexdigest()
+    assert hmac.compare_digest(sig, verified_sig) is True
+
+
+
