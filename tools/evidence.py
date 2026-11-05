@@ -71,6 +71,7 @@ def save_registry(case_dir: Path | str, registry: dict) -> None:
 
 
 def register_evidence(
+    # Invariant Rule 2.1: Universal source referencing with immutable SHA-256 fingerprinting
     case_dir: Path | str,
     file_path: Path | str,
     evidence_type: str,
@@ -323,3 +324,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     run_cli(main)
+
