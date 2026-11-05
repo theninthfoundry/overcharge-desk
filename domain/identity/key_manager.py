@@ -44,9 +44,12 @@ class KeyManager:
 
     def __init__(
         self,
-        config_dir: Path | str = "config",
+        config_dir: Path | str | None = None,
         app_env: Optional[str] = None,
     ):
+        if config_dir is None:
+            env_dir = os.getenv("OVERCHARGE_KEY_DIR")
+            config_dir = Path(env_dir) if env_dir else Path.home() / ".overcharge" / "keys"
         self.config_dir = Path(config_dir)
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.app_env = (app_env or os.getenv("APP_ENV", "development")).lower()
