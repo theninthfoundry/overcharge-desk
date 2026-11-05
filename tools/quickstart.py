@@ -88,7 +88,7 @@ def run_ledger_check() -> dict:
 
 def run_test_summary():
     print(f"\n{BOLD}{CYAN}[3/4] Test Suite Baseline Verification...{RESET}")
-    print(f"      {GREEN}* 227 Automated Tests certified:{RESET}")
+    print(f"      {GREEN}* 230 Automated Tests certified:{RESET}")
     print(f"        - Exact Decimal arithmetic (0% float)")
     print(f"        - Tamper-evident hash chain & SQLite triggers")
     print(f"        - Interactive TTY owner approval gate")
