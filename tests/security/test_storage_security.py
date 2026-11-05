@@ -99,3 +99,12 @@ def test_url_encoded_traversal_attempts(storage):
             storage.validate_case_id(cid)
 
 
+def test_null_byte_injection_in_case_and_artifacts(storage):
+    """Verify null bytes in case IDs or artifact names fail-closed immediately."""
+    with pytest.raises(StorageSecurityError):
+        storage.validate_case_id("OC-2026\0hack")
+    with pytest.raises(StorageSecurityError):
+        storage.resolve_artifact_path("OC-20261106-01", "invoice.json\0.txt")
+
+
+
