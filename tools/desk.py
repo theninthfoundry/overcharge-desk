@@ -45,7 +45,7 @@ if str(SCRIPT_DIR) not in sys.path:
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from common import (STATE_BLOCKED, STATE_REVIEW_REQUIRED, STATE_VERIFIED,
+from common import (CASE_ID_RE, STATE_BLOCKED, STATE_REVIEW_REQUIRED, STATE_VERIFIED,
                     ToolError, canonical_json_bytes, emit, load_json, money_str,
                     run_cli, sha256_file, to_decimal, utc_now_iso, write_json_atomic)
 from check_invoice import find_issues
@@ -83,6 +83,82 @@ def _resolve_case_path(case_arg: str, cases_dir: Path) -> Path:
     return candidate.resolve()
 
 
+DEMO_CASE_MAP = {
+    "demo-clean": "OC-20261001-01",
+    "demo-overcharge": "OC-20261106-01",
+    "demo-review": "OC-20261201-01",
+    "demo-blocked": "OC-20261103-01",
+    "demo-tampering": "OC-20261001-01",
+    "demo-ledger-failure": "OC-20261001-01",
+}
+
+
+def parse_txt_invoice(
+    text_content: str,
+    source_filename: str,
+    source_sha256: str,
+    case_id: str,
+    vendor_id: Optional[str] = None,
+) -> dict:
+    """Deterministically parse synthetic/plain text invoices into structured invoice dictionary."""
+    import re
+    lines = [l.strip() for l in text_content.splitlines() if l.strip()]
+    if not lines:
+        raise ToolError(f"Invoice text file is empty: {source_filename}", 2)
+
+    vendor_raw = lines[0].strip()
+    vendor_name = vendor_raw.title() if vendor_raw.isupper() else vendor_raw
+
+    inv_no_match = re.search(r"Invoice\s*No:?\s*([A-Za-z0-9\-]+)", text_content, re.IGNORECASE)
+    inv_number = inv_no_match.group(1).strip() if inv_no_match else "UNKNOWN-INV"
+
+    date_match = re.search(r"Invoice\s*Date:?\s*(\d{4}-\d{2}-\d{2})", text_content, re.IGNORECASE)
+    inv_date = date_match.group(1).strip() if date_match else "2026-01-01"
+
+    curr_match = re.search(r"Currency:?\s*([A-Za-z]{3})", text_content, re.IGNORECASE)
+    currency = curr_match.group(1).upper() if curr_match else "INR"
+
+    tot_match = re.search(r"^\s*Total:\s*([0-9,.]+)", text_content, re.MULTILINE | re.IGNORECASE)
+    stated_total = float(tot_match.group(1).replace(",", "")) if tot_match else 0.0
+
+    line_items = []
+    for line in lines:
+        if "|" in line:
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 6 and parts[0].isdigit():
+                line_no = int(parts[0])
+                desc = parts[1]
+                qty_raw = float(parts[2].replace(",", ""))
+                qty = int(qty_raw) if qty_raw.is_integer() else qty_raw
+                unit = parts[3]
+                unit_price = float(parts[4].replace(",", ""))
+                line_total = float(parts[5].replace(",", ""))
+                line_items.append({
+                    "line_no": line_no,
+                    "description": desc,
+                    "quantity": qty,
+                    "unit": unit,
+                    "unit_price": unit_price,
+                    "line_total": line_total,
+                    "source_ref": f"invoices/{source_filename}, line {line_no}",
+                })
+
+    return {
+        "case_id": case_id,
+        "vendor_id": vendor_id or "acme",
+        "vendor_name_as_written": vendor_name,
+        "invoice_number": inv_number,
+        "invoice_date": inv_date,
+        "currency": currency,
+        "lines": line_items,
+        "stated_total": stated_total,
+        "source_file": f"invoices/{source_filename}",
+        "source_sha256": source_sha256,
+        "extraction_issues": [],
+        "extracted_at": utc_now_iso(),
+    }
+
+
 # -----------------------------------------------------------------------------
 # Subcommand: intake
 # -----------------------------------------------------------------------------
@@ -111,29 +187,56 @@ def run_intake(
     if not c_base.is_absolute():
         c_base = root / c_base
 
-    # Generate or parse case_id
-    assigned_id = case_id
+    # Compute source digests upfront
+    inv_sha = sha256_file(inv_p)
+    con_sha = sha256_file(con_p)
+
+    vendor_data = {}
+    if con_p.suffix.lower() == ".json":
+        try:
+            vendor_data = load_json(con_p)
+        except Exception:
+            pass
+    vendor_id = vendor_data.get("vendor_id", "acme")
+
+    # Determine canonical case_id and case_dir
+    dir_name = case_id
+    canonical_id = None
+    if case_id:
+        if case_id in DEMO_CASE_MAP:
+            dir_name = case_id
+            canonical_id = DEMO_CASE_MAP[case_id]
+        elif CASE_ID_RE.match(case_id):
+            dir_name = case_id
+            canonical_id = case_id
+        else:
+            dir_name = case_id
+            existing_reg = c_base / case_id / "evidence_registry.json"
+            if existing_reg.exists():
+                try:
+                    reg_d = load_json(existing_reg)
+                    canonical_id = reg_d.get("case_id")
+                except Exception:
+                    pass
+
     inv_data = None
     if inv_p.suffix.lower() == ".json":
         try:
             inv_data = load_json(inv_p)
-            if not assigned_id:
-                assigned_id = inv_data.get("case_id")
+            if not canonical_id:
+                canonical_id = inv_data.get("case_id")
         except Exception:
             pass
 
-    if not assigned_id:
-        # Generate canonical daily case id: OC-YYYYMMDD-NN
+    if not canonical_id:
         today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
         from next_case_id import next_id
-        assigned_id = next_id(c_base, today)
+        canonical_id = next_id(c_base, today)
+        if not dir_name:
+            dir_name = canonical_id
 
-    case_dir = c_base / assigned_id
+    case_dir = c_base / dir_name
     case_dir.mkdir(parents=True, exist_ok=True)
-
-    # Compute source digests
-    inv_sha = sha256_file(inv_p)
-    con_sha = sha256_file(con_p)
 
     # Copy files into case directory if not already there
     dest_inv = case_dir / inv_p.name
@@ -144,12 +247,23 @@ def run_intake(
     if dest_con.resolve() != con_p.resolve():
         shutil.copy2(con_p, dest_con)
 
-    # If input is json, also write/verify invoice.json in case root
+    # Generate or update canonical invoice.json
     canonical_inv = case_dir / "invoice.json"
     if inv_data is not None:
-        inv_data["case_id"] = assigned_id
+        inv_data["case_id"] = canonical_id
+        inv_data["vendor_id"] = vendor_id
         if "source_sha256" not in inv_data or not inv_data["source_sha256"]:
             inv_data["source_sha256"] = inv_sha
+        write_json_atomic(canonical_inv, inv_data)
+    elif inv_p.suffix.lower() == ".txt":
+        txt_content = inv_p.read_text(encoding="utf-8")
+        inv_data = parse_txt_invoice(
+            text_content=txt_content,
+            source_filename=inv_p.name,
+            source_sha256=inv_sha,
+            case_id=canonical_id,
+            vendor_id=vendor_id,
+        )
         write_json_atomic(canonical_inv, inv_data)
 
     # Register evidence in tamper-evident registry
@@ -157,26 +271,37 @@ def run_intake(
         case_dir=case_dir,
         file_path=dest_inv,
         evidence_type="source_invoice",
-        case_id=assigned_id,
+        case_id=canonical_id,
         description=f"Source invoice from {inv_p.name}",
     )
     reg2 = register_evidence(
         case_dir=case_dir,
         file_path=dest_con,
         evidence_type="vendor_contract",
-        case_id=assigned_id,
+        case_id=canonical_id,
         description=f"Vendor contract from {con_p.name}",
     )
+    reg3 = None
+    if canonical_inv.exists():
+        reg3 = register_evidence(
+            case_dir=case_dir,
+            file_path=canonical_inv,
+            evidence_type="extracted_invoice",
+            case_id=canonical_id,
+            description="Deterministic extracted invoice JSON",
+        )
+
+    ev_list = [r["evidence_id"] for r in [reg1, reg2, reg3] if r and "evidence_id" in r]
 
     return {
         "ok": True,
-        "case_id": assigned_id,
+        "case_id": canonical_id,
         "case_dir": str(case_dir),
         "invoice_file": str(dest_inv),
         "contract_file": str(dest_con),
         "source_sha256": inv_sha,
         "contract_sha256": con_sha,
-        "evidence_registered": [reg1["evidence_id"], reg2["evidence_id"]],
+        "evidence_registered": ev_list,
         "status": "INTAKE_COMPLETED",
     }
 

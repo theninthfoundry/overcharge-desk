@@ -27,6 +27,8 @@ cases/demo-*/compare.json*
 cases/demo-*/evidence_registry.json
 cases/demo-*/manifest.json
 cases/demo-*/*.csv
+cases/demo-*/*.txt
+cases/demo-*/acme.json
 case_audit/
 *.tmp
 *.bak
