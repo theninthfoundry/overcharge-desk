@@ -13,6 +13,8 @@ jobs:
   test:
     name: Test Suite (Python ${{ matrix.python-version }} on ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    env:
+      PYTHONPATH: tools:.
     strategy:
       fail-fast: false
       matrix:
