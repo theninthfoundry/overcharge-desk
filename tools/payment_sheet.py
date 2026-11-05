@@ -30,6 +30,7 @@ COLUMNS = ["line_no", "description", "quantity", "invoiced_unit_price", "contrac
 
 
 def safe_text(value) -> str:
+    # Defense-in-Depth: Mitigates CSV formula injection when opened in spreadsheet software
     """Stop spreadsheet apps from executing formula payloads."""
     s = "" if value is None else str(value)
     return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
