@@ -1,6 +1,6 @@
 PY ?= python3
 
-.PHONY: test reset-demo check demo verify-ledger quickstart simulate
+.PHONY: test reset-demo check demo verify-ledger quickstart simulate simulate-fast health inspect
 
 test:
 	$(PY) -m pytest -v
@@ -13,6 +13,15 @@ quickstart:
 
 simulate:
 	$(PY) tools/simulate_switch.py
+
+simulate-fast:
+	$(PY) tools/simulate_switch.py --fast
+
+health:
+	$(PY) tools/health_check.py
+
+inspect:
+	$(PY) tools/inspect_receipt.py OC-20261106-01
 
 demo:
 	$(PY) tools/run_demo_suite.py --clean
