@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Adversarial and Edge-Case Tests for the Overcharge Desk Financial Engine.
 
 Covers all 35 required scenarios from Phase 2 Section 9:
