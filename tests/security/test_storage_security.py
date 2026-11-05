@@ -107,4 +107,16 @@ def test_null_byte_injection_in_case_and_artifacts(storage):
         storage.resolve_artifact_path("OC-20261106-01", "invoice.json\0.txt")
 
 
+def test_read_oversized_artifact_refusal(storage):
+    """Writing and reading artifacts larger than 10MB is prohibited."""
+    c_dir = storage.get_case_directory("OC-20261106-99")
+    huge_file = c_dir / "invoice.json"
+    # Write slightly over limit directly
+    huge_file.write_bytes(b"a" * (10 * 1024 * 1024 + 10))
+
+    with pytest.raises(StorageSecurityError, match="exceeds maximum allowed size"):
+        storage.read_artifact("OC-20261106-99", "invoice.json")
+
+
+
 
