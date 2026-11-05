@@ -79,3 +79,25 @@ def test_optimistic_concurrency_conflict_detection(case_file):
             reason="Stale update attempt",
             expected_version=1,
         )
+
+
+def test_terminal_state_closed_rejects_transitions(case_file):
+    """Verify CLOSED state permits zero further transitions."""
+    # CREATED -> CLOSED is legal
+    CaseLifecycleManager.transition(
+        case_file,
+        to_state=CaseState.CLOSED,
+        actor_id="admin",
+        reason="Case cancelled",
+    )
+
+    # Any transition from CLOSED must fail
+    with pytest.raises(InvalidStateTransitionError):
+        CaseLifecycleManager.transition(
+            case_file,
+            to_state=CaseState.RECONCILIATION_RUNNING,
+            actor_id="operator",
+            reason="Illegal reopen",
+        )
+
+
