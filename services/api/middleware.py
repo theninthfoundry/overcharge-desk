@@ -120,7 +120,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Request correlation ID
+        # Request correlation ID: Inherit from reverse proxy or generate fresh 16-hex random ID
         req_id = request.headers.get("X-Request-ID") or os.urandom(8).hex()
         response = await call_next(request)
         response.headers["X-Request-ID"] = req_id
