@@ -152,6 +152,7 @@ def register_evidence(
 
 
 def verify_evidence(
+    # Integrity Verification: Re-hashes on-disk evidence files to detect unauthorized modification
     case_dir: Path | str,
     evidence_id: Optional[str] = None,
     base_dir: Optional[Path | str] = None,
