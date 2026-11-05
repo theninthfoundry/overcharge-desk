@@ -1,14 +1,14 @@
 # ARCHITECTURE.md — Overcharge Desk Technical Architecture
 
 > **System**: Overcharge Desk — Evidence-First Vendor Reconciliation & Cryptographic Payment Control  
-> **Version**: 3.0.0  
+> **Version**: 3.2.0  
 > **Authority**: [AGENTS.md](file:///d:/overcharge%20files/AGENTS.md)
 
 ---
 
 ## 1. High-Level Architecture Overview
 
-Overcharge Desk is designed as a **fail-closed, evidence-first payment control pipeline**. It strictly separates non-deterministic language extraction from deterministic arithmetic verification, independent comparison auditing, cryptographic human authorization, and tamper-evident append-only ledgering.
+Overcharge Desk is designed as a **fail-closed, evidence-first payment control pipeline**. It strictly separates non-deterministic language extraction from deterministic arithmetic verification, independent comparison auditing, cryptographic human authorization, tamper-evident append-only ledgering, and corporate treasury payment instruction release.
 
 ```mermaid
 graph TD
