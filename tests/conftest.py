@@ -27,6 +27,7 @@ def vendor_file(tmp_path):
 
 
 def make_invoice(lines, **over):
+    # Test Fixture Factory: Builds canonical invoice dictionaries with authentic fingerprints
     inv = {
         "case_id": "OC-20261106-01",
         "vendor_name_as_written": "Acme Supplies Pvt Ltd",
