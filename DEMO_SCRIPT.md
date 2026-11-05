@@ -2,22 +2,24 @@
 
 > All vendors, invoices, amounts, and names are synthetic demo data.
 
-This demo script proves that Overcharge Desk delivers deterministic verification, cryptographic human-in-the-loop authorization, tamper-evident audit chains, and strict fail-closed boundary controls.
+This demo script proves that Overcharge Desk delivers deterministic verification, cryptographic human-in-the-loop authorization, tamper-evident audit chains, and strict fail-closed boundary controls inside a **Switch / Mattermost** collaborative multi-agent workflow.
 
 ---
 
 ## 🎯 What the Demonstration Proves
 
 1. **Exact Decimal Arithmetic**: The system calculates ₹6,000 variance and 12% overcharge using `decimal.Decimal` and `ROUND_HALF_UP`, never floating-point math.
-2. **Four-Dimensional State Model**: Independent `VerificationStatus`, `CommercialStatus`, `ApprovalStatus`, and `PaymentRecommendationStatus`.
-3. **Four-Tier Controlled Output Routing**:
-   - `corrected_payment.csv` is ONLY produced for `VERIFIED` audits with verified cryptographic approval receipts.
+2. **Multi-Agent Orchestration on Switch**: Three specialized AI agents (**Reader**, **Auditor**, **Writer**) collaborate in Mattermost `#overcharge-desk`, operating deterministic tools via `tools/desk.py`.
+3. **Vendor Memory Moment**: The Auditor agent queries historical cases across all ledger records (`tools/desk.py history --vendor acme`), recalling past invoice outcomes and withheld variances.
+4. **Unforgeable Human Approval**: The business owner authorizes payments via an interactive terminal script (`tools/approve.py`) requiring TTY sessions and Argon2id password verification.
+5. **Four-Tier Controlled Output Routing**:
+   - `corrected_payment.csv` is ONLY produced upon cryptographic verification of a valid signed approval receipt.
    - `payment_preview.csv` is produced for pre-approval analysis (explicitly labeled `NOT AUTHORIZED FOR PAYMENT`).
    - `partial_review.csv` is produced for uncontracted lines (commercial investigation only).
    - `blocked_review_report.csv` is produced for arithmetic discrepancies with zero payable fields.
-4. **Cryptographic Approval Receipts**: Decisions are signed using HMAC-SHA-256 tokens binding the full 64-char hashes of the case, invoice, comparison, and evidence.
-5. **Tamper-Evident SQLite Ledger with Triggers & Checkpoints**: Events form an unbroken SHA-256 hash chain anchored by a genesis block (`0 * 64`) with database-level append-only triggers and signed checkpoint verification.
-6. **Standalone Audit Package Export**: Self-contained evidence packages with verifiable `audit_integrity_report.json` and cryptographic certification.
+6. **Cryptographic Approval Receipts**: Decisions are signed using HMAC-SHA-256 tokens binding the full 64-char hashes of the case, invoice, comparison, and evidence.
+7. **Tamper-Evident SQLite Ledger with Triggers & Checkpoints**: Events form an unbroken SHA-256 hash chain anchored by a genesis block (`0 * 64`) with database-level append-only triggers and signed checkpoint verification.
+8. **Standalone Audit Package Export**: Self-contained evidence packages with verifiable `audit_integrity_report.json` and cryptographic certification.
 
 ---
 
@@ -42,89 +44,67 @@ Run the automated demonstration suite that verifies all 6 benchmark cases, expor
 python tools/run_demo_suite.py --clean
 ```
 
-Expected output:
-```json
-{
-  "ok": true,
-  "all_cases_passed": true,
-  "cases": {
-    "case_a_clean": { "status": "PASSED", "verification_status": "VERIFIED", "payable_total": "30000.00", "withheld_total": "0.00", "receipt_id": "AR-OC-20261001-01-..." },
-    "case_b_overcharge": { "status": "PASSED", "verification_status": "VERIFIED", "invoiced_total": "66000.00", "payable_total": "60000.00", "withheld_total": "6000.00", "receipt_id": "AR-OC-20261106-01-..." },
-    "case_c_review_required": { "status": "PASSED", "verification_status": "REVIEW_REQUIRED", "unresolved_lines": 1 },
-    "case_d_blocked": { "status": "PASSED", "verification_status": "BLOCKED", "approval_refused_fail_closed": true },
-    "case_e_tampering": { "status": "PASSED", "attack_simulated": "POST_APPROVAL_COMPARISON_ALTERATION", "tampering_detected": true, "payment_prevented_fail_closed": true },
-    "case_f_ledger_failure": { "status": "PASSED", "failure_simulated": "UNWRITEABLE_AUDIT_LEDGER", "pipeline_refused_fail_closed": true, "payment_prevented_fail_closed": true }
-  },
-  "audit_package_exported": {
-    "case_id": "OC-20261106-01",
-    "target_dir": "case_audit/OC-20261106-01",
-    "package_verified": true
-  },
-  "ledger_summary": {
-    "total_events": 28,
-    "chain_valid": true
-  }
-}
-```
-
 ---
 
-## 🎬 Step-by-Step Manual Demo Script (Live Walkthrough)
+## 🎬 Step-by-Step Multi-Agent Walkthrough (Switch & Terminal)
 
 ### Step 1: Pre-flight Verification (30 seconds)
 Show the passing automated test suite to establish radical engineering transparency:
 ```bash
 python -m pytest -v
 ```
-*Voice-over*: "Overcharge Desk operates under strict engineering invariants defined in AGENTS.md. 154 automated adversarial tests verify exact decimal arithmetic, path traversal guards, formula injection mitigation, and fail-closed security boundaries."
+*Voice-over*: "Overcharge Desk operates under strict engineering invariants defined in AGENTS.md. 227 automated adversarial tests verify exact decimal arithmetic, path traversal guards, formula injection mitigation, and fail-closed security boundaries across Windows, Ubuntu, and Python 3.9 through 3.13."
 
 ---
 
-### Step 2: The Acme Overcharge Scenario (1 minute)
+### Step 2: The Switch Multi-Agent Flow (Case B: Acme Overcharge)
 
-1. **Inspect Invoice and Contract**:
-   - Invoice: `invoices/acme-inv-1103.txt` (500 CC-5 cartons @ ₹112.00, 40 pallet wraps @ ₹250.00)
-   - Contract: `contracts/acme-contract.md` (Schedule A: CC-5 rate is ₹100.00, PW-1 rate is ₹250.00)
+1. **Reader Agent Intake**:
+   - The owner uploads `invoices/acme-inv-1103.txt` into `#overcharge-desk`.
+   - Reader agent executes deterministic intake:
+     ```bash
+     python tools/desk.py intake invoices/acme-inv-1103.txt seed/acme.json --case-id demo-overcharge
+     ```
+   - *Voice-over*: "Reader validates the invoice file, preserves immutable source SHA-256 fingerprints, and registers evidence in `evidence_registry.json`. It never infers or modifies values."
 
-2. **Run Reconciliation Pipeline (Pre-approval Analysis Mode)**:
-   ```bash
-   python tools/pipeline.py cases/demo-overcharge/invoice.json vendors/acme.json cases/demo-overcharge/
-   ```
-   *Voice-over*: "The pipeline verifies the source document hash, executes deterministic comparison, validates math down to the byte, records events in the SQLite ledger, and registers evidence. It identifies a ₹12/unit overcharge on 500 cartons: ₹6,000 withheld. Because human approval has not yet been granted, it outputs `payment_preview.csv` labeled NOT AUTHORIZED FOR PAYMENT."
+2. **Auditor Agent Deterministic Audit & Memory Moment**:
+   - Auditor agent runs the comparison and checks vendor history:
+     ```bash
+     python tools/desk.py audit demo-overcharge
+     python tools/desk.py history --vendor acme
+     ```
+   - *Voice-over*: "Auditor detects an uncontracted ₹12/unit variance on 500 CC-5 cartons: ₹6,000 withheld. It queries the audit ledger to recall past vendor outcomes—this is the memory moment. Auditor emits full 64-character hashes and pre-approval preview `payment_preview.csv` (labeled NOT AUTHORIZED FOR PAYMENT). Auditor has no approval command."
 
-3. **Issue Owner Authentication Token**:
-   ```bash
-   python tools/auth.py issue-token owner
-   ```
-   *Voice-over*: "Authorization does not rely on LLM prompts or chat strings. The owner receives a time-bound HMAC-SHA-256 authenticated token."
+3. **Human Owner Interactive Terminal Authorization**:
+   - The owner runs the dedicated approval CLI in their terminal:
+     ```bash
+     python tools/approve.py demo-overcharge --username owner
+     ```
+   - *Voice-over*: "Financial approval is strictly isolated from LLM prompts. `approve.py` refuses piped execution, enforces an interactive TTY session, prompts for the owner's Argon2id password, independently computes the payable subtotal server-side, signs an immutable receipt, and emits a full 64-character receipt hash."
+   - The owner copies the notification hash into `#overcharge-desk`.
 
-4. **Approve via Authorization Gateway**:
-   ```bash
-   python tools/approval_gateway.py approve cases/demo-overcharge --token "<owner_token>" --amount 60000.00
-   ```
-   *Voice-over*: "The gateway re-verifies evidence on disk, verifies that the comparison is clean, validates the approved amount matches the exact payable subtotal, and issues a cryptographic receipt binding all 64-character digests."
-
-5. **Generate Final Authorized Payment Sheet**:
-   ```bash
-   python tools/pipeline.py cases/demo-overcharge/invoice.json vendors/acme.json cases/demo-overcharge/ --require-approval
-   ```
-   *Voice-over*: "With authorized approval verified, the pipeline outputs `corrected_payment.csv`. Over-billed lines pay contract amounts and withhold variances; matched lines pay as invoiced."
+4. **Writer Agent Payment Finalization**:
+   - Writer agent runs:
+     ```bash
+     python tools/desk.py finalize demo-overcharge
+     ```
+   - *Voice-over*: "Writer verifies the cryptographic approval receipt and releases `corrected_payment.csv` paying contract rates and withholding ₹6,000 overcharge. Writer drafts `dispute_email.md` and posts the settlement summary."
 
 ---
 
-### Step 3: Adversarial Proof: Blocking Internal Discrepancies (30 seconds)
+### Step 3: Adversarial Proof: Arithmetic Discrepancy (30 seconds)
 
 1. **Run Blocked Discrepancy Case**:
    ```bash
-   python tools/pipeline.py cases/demo-blocked/invoice.json vendors/acme.json cases/demo-blocked/
+   python tools/desk.py audit demo-blocked
    ```
    *Voice-over*: "Line 1 claims $500 \times 112 = 58,000$, which is mathematically false ($56,000$). The system refuses to guess, flags `SOURCE_DISCREPANCY`, and enters `BLOCKED` status."
 
 2. **Attempt Unauthorized Approval**:
    ```bash
-   python tools/approval_gateway.py approve cases/demo-blocked --token "<owner_token>"
+   python tools/approve.py demo-blocked --username owner
    ```
-   *Voice-over*: "The Authorization Gateway immediately refuses with exit code 4: `Cannot approve BLOCKED audit`. No payment sheet is ever produced. Only discrepancy facts are exported to `blocked_review_report.csv` with zero payable fields."
+   *Voice-over*: "The system immediately refuses with exit code 4: `Only 'VERIFIED' cases may be approved`. No payment sheet is ever produced. Only discrepancy facts are exported to `blocked_review_report.csv` with zero payable fields."
 
 ---
 
@@ -146,7 +126,7 @@ python tools/export_audit_package.py verify case_audit/OC-20261106-01
 Verify that all actions were committed to the SQLite ledger without tampering:
 
 ```bash
-python tools/verify_ledger.py --strict
+python tools/audit_ledger.py verify
 ```
 
 *Voice-over*: "Every case creation, comparison, approval, and payment recommendation is committed to an append-only SQLite ledger using a cryptographic SHA-256 hash chain starting from genesis. The independent verifier traverses the chain from start to finish and confirms zero broken links and zero altered payloads."
