@@ -52,7 +52,13 @@ app.include_router(vendors.router, prefix=api_prefix)
 
 @app.get("/api/v1/health", tags=["Health"])
 def health_check():
-    """Operational health endpoint distinguishing LIVE, READY, and DEGRADED states."""
+    """Operational health endpoint distinguishing LIVE, READY, and DEGRADED states.
+    
+    Subsystem Checks:
+    - identity_database: Verifies SQLite schema and production demo credentials safety.
+    - signing_key: Verifies availability of active HMAC signing key.
+    - storage: Verifies filesystem write accessibility in cases/.
+    """
     checks = {}
     is_ready = True
 
