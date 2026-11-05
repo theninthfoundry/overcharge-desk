@@ -150,6 +150,7 @@ def sha256_file(path) -> str:
 
 
 def is_safe_relative_path(path_str: str) -> bool:
+    # Boundary Guard: Cross-platform directory traversal rejection for POSIX and Windows
     """Reject path traversal attempts across Windows and POSIX systems.
     
     Prevents:
