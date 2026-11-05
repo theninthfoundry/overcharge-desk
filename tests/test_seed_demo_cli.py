@@ -22,3 +22,4 @@ def test_seed_demo_check_cli():
     assert checks.get("seed_exists", {}).get("status") == "PASS"
     assert checks.get("rates", {}).get("status") == "PASS"
     assert checks.get("rates", {}).get("sku_count", 0) >= 2
+

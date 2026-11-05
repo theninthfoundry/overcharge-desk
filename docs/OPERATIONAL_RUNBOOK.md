@@ -61,3 +61,4 @@ Historical keys must be preserved in read-only mode so historical receipts and a
   1. Inspect the case directory `cases/<case_id>/`.
   2. Check if a human operator or process touched `compare.json` or `raw_invoice.txt`.
   3. Re-run `tools/desk.py intake` to create a new case if the source was legitimate, or reject the case as contaminated.
+

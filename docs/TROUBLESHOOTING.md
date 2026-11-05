@@ -33,3 +33,4 @@ python tools/ledger.py dump --broken-only
 ### 2.2 Symlink Resolution in Sandboxes
 **Problem**: Tests on restricted Windows sandboxes raise symlink escape warnings.  
 **Resolution**: Overcharge Desk uses canonical realpath containment checks (`is_relative_to` or path traversal safeguards) rather than assuming symlink creation permissions.
+

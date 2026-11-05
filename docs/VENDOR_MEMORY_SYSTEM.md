@@ -89,3 +89,4 @@ When the Auditor Agent performs an audit:
 2. It immediately checks vendor history via `tools/desk.py history --vendor <name>`.
 3. If prior disputes exist for the same line item, it alerts the human owner in Switch:
    > *"Notice: Acme Industrial Supplies has repeated this exact discrepancy (INR 300/unit rate inflation) across Invoice INV-1090 (Case OC-20261001-01) and current Invoice INV-1103. Cumulative withholding across both cycles: INR 12,000.00."*
+

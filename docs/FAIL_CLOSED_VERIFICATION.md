@@ -62,3 +62,4 @@ Under **Invariant Rule 5.1**:
 - AI agents formulate natural-language summaries and assist in communication.
 - **Zero calculations take place in LLM context windows**.
 - All amounts, variances, quantizations, and subtotals are generated strictly by deterministic Python standard library routines (`decimal.Decimal`).
+

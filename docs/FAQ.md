@@ -26,3 +26,4 @@
 
 ### Q: How does the historical vendor memory feature work?
 **A**: Historical memory is completely deterministic. When the Auditor Agent evaluates an invoice, it queries the SQLite ledger via `python tools/desk.py history --vendor <name>`. This recalls prior settled cases, dispute outcomes, and withheld amounts, alerting the owner if a vendor repeats an overcharge pattern.
+

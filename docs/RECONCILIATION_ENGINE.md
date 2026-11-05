@@ -44,3 +44,4 @@ $$TotalPayable = \sum_{i \in MATCHED \cup OVERCHARGE} LineTotal_{contract, i}$$
 $$TotalWithheld = \sum_{i \in OVERCHARGE} Variance_i$$
 
 Under **Invariant Rule 1.3**, line items are quantized individually prior to aggregation.
+

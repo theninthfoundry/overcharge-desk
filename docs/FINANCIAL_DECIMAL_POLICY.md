@@ -46,3 +46,4 @@ In high-volume accounts payable reconciliation, micro-variances compound across 
 ### 2.3 Rule 1.3: String-Based JSON Serialization
 To prevent upstream and downstream web browsers or JSON parsers from coercing numbers into IEEE 754 floats:
 - All monetary fields in REST responses and JSON artifacts are serialized as formatted string literals (`"60000.00"`, `"6000.00"`).
+

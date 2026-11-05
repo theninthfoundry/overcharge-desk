@@ -22,3 +22,4 @@
 - **Interactive TTY Gate**: An enforcement mechanism (`sys.stdin.isatty()`) requiring a live human terminal session for entering approval credentials.
 - **Separation of Duties**: An organizational security control ensuring agents who analyze invoices cannot approve disbursements.
 - **Schedule A**: The contractual item catalog detailing authorized SKUs, descriptions, unit rates, and pricing tiers.
+

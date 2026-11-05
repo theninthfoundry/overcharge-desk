@@ -53,3 +53,4 @@ In production environments:
 1. The HMAC signing key and private credentials must reside outside the repository root via `OVERCHARGE_KEY_DIR`.
 2. Under Invariant Rule 6.1, if `OVERCHARGE_KEY_DIR` is not set in production mode, the application fails closed rather than falling back to in-repo insecure keys.
 3. The interactive CLI tool `tools/approve.py` checks `sys.stdin.isatty()` to ensure an interactive human operator is entering credentials.
+

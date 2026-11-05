@@ -47,3 +47,4 @@ def test_inspect_receipt_cli_missing_target():
     assert proc.returncode == 1
     data = json.loads(proc.stdout)
     assert data.get("status") == "ERROR"
+

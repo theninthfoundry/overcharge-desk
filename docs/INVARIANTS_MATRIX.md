@@ -25,3 +25,4 @@
 | **5.2** | Unified Agent CLI | `tools/desk.py` | `tests/test_desk_cli.py` | Verification of CLI subcommands and absence of `approve`. |
 | **6.1** | Memory-Hard Argon2id Auth | `domain/identity/passwords.py`, `tools/auth.py` | `tests/test_argon2id.py` | Memory cost (64MB) and thread validation. |
 | **7.1** | Filesystem Path Containment | `domain/cases/storage.py`, `tools/desk.py` | `tests/test_path_containment.py` | Path traversal and symlink escape defenses. |
+

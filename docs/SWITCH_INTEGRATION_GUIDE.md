@@ -98,3 +98,4 @@ If Switch or Mattermost is not running locally, execute the full workflow in rea
 ```bash
 python tools/simulate_switch.py
 ```
+

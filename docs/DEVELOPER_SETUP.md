@@ -64,3 +64,4 @@ python tools/simulate_switch.py --fast
    - Never suppress or silently catch exceptions.
 3. **Conventional Commits**:
    - Follow standard prefixes: `feat:`, `fix:`, `test:`, `docs:`, `build:`.
+

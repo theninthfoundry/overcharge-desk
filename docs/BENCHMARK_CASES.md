@@ -46,3 +46,4 @@
 ### Case F: Ledger Write Failure
 - **Condition**: Storage layer failure simulated by locking `ledger.db` as read-only.
 - **Result**: System refuses to process disbursement without verifiable audit record. Fail-closed shutdown.
+

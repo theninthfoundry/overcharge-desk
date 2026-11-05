@@ -130,3 +130,4 @@ Emitted by Settlement Agent after verifying owner cryptographic signature:
 1. **No LLM Chat Approvals**: Stating "Approved", "Looks good", or `@owner: approve` in Switch chat never transitions case state.
 2. **Missing Receipt Refusal**: Executing `tools/desk.py finalize <case_id>` without `--receipt-file` exits immediately with code `1` and refuses to write the disbursement file.
 3. **Receipt Tampering Refusal**: Modifying even 1 byte or 1 bit of `receipt.json` invalidates the HMAC signature and halts execution with `SIGNATURE_VERIFICATION_FAILED`.
+

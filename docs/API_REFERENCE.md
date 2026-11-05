@@ -93,3 +93,4 @@ Records owner approval. Requires `owner` or `approver` role.
 
 ### 3.6 `POST /cases/{case_id}/finalize`
 Releases the corrected payment CSV disbursement. Requires verified approval receipt.
+
