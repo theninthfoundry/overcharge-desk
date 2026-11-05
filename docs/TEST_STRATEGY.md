@@ -10,7 +10,7 @@
 
 Overcharge Desk enforces a zero-trust, test-driven engineering culture. No feature or security boundary is considered complete without automated test execution verifying both nominal and adversarial behaviors.
 
-The automated test suite contains **139 passing tests** across 9 test modules:
+The automated test suite contains **154 passing tests** across 11 test modules:
 
 ```text
 ============================= test session starts =============================
@@ -18,8 +18,9 @@ platform win32 -- Python 3.13.5, pytest-9.1.0
 rootdir: D:\overcharge files
 configfile: pytest.ini
 testpaths: tests
-collected 139 items
+collected 154 items
 
+tests/test_api.py ...................... [10 tests: FastAPI operations API, auth, cases, artifacts, ledger]
 tests/test_audit_ledger.py .............. [11 tests: Genesis, chain links, triggers, tampering, gaps, checkpoints]
 tests/test_auth_and_approval.py ......... [15 tests: HMAC tokens, TTL, role permissions, signed receipts, gateway]
 tests/test_boundary_audit.py ............ [20 tests: 4-tier artifact model, path traversal, injection, digests]
@@ -27,10 +28,11 @@ tests/test_case_manager_and_evidence.py . [ 8 tests: Directory layout, state tra
 tests/test_compare.py .................. [21 tests: Exact decimal precision, rounding, SKU boundaries, dates]
 tests/test_financial_adversarial.py .... [35 tests: Non-finite inputs, negative numbers, formula injection]
 tests/test_pipeline_orchestration.py .... [ 3 tests: Manifest generation, approval enforcement, recovery]
+tests/test_rbac_and_separation_of_duties.py [ 5 tests: RBAC policies, separation of duties, self-approval prevention]
 tests/test_tools.py .................... [25 tests: CLI utilities, error exits, seed parity]
 tests/test_demo_cases.py ................ [ 1 test:  Full 6-case benchmark suite + audit package export]
 
-============================= 139 passed in ~8s =============================
+============================= 154 passed in ~8s =============================
 ```
 
 ---

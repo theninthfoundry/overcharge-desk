@@ -255,3 +255,4 @@ class CaseStateRecord:
             last_updated=data.get("last_updated", utc_now_iso()),
             reason=data.get("reason", ""),
         )
+

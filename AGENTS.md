@@ -106,4 +106,4 @@ All agents (Claude Code, OpenAI Codex, Antigravity, and any other automated or h
 <!-- Invariant Rule 5.1: Strict separation of financial logic from AI prompts -->
 
 
-<!-- Invariant Verification: Permanent baseline certified across 139 automated test scenarios -->
+<!-- Invariant Verification: Permanent baseline certified across 154 automated test scenarios -->

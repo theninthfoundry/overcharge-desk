@@ -51,6 +51,6 @@ The system completely eliminates floating-point financial calculations, prevents
 
 ## 3. Test & Verification Baseline
 
-- **Automated Tests**: 139 passed in ~8 seconds.
+- **Automated Tests**: 154 passed in ~8 seconds.
 - **Matrix CI**: 10/10 matrix jobs passing on GitHub Actions (Python 3.9–3.13 on Ubuntu and Windows).
 - **Benchmark Suite**: 6/6 demo cases passing with standalone audit package export verified.
