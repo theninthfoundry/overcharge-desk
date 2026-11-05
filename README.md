@@ -1,325 +1,231 @@
 # Overcharge Desk 🔍⚡
 
-> **A deterministic, human-in-the-loop multi-agent audit room built for the Flip the Switch Hackathon.**  
-> Three AI agents and one human business owner cross-examine vendor invoices against contracts, recall historical vendor overcharges, and produce dispute packages—with zero LLM arithmetic and absolute human authority.
+> **Deterministic, Evidence-First Vendor Reconciliation & Cryptographic Payment Control**  
+> Verifies commercial invoices against contracts with exact decimal arithmetic, binds human approvals to immutable cryptographic evidence receipts, logs append-only event chains in a tamper-evident SQLite ledger, and strictly prevents unauthorized or unverified payment recommendations.
 
-[![Hackathon](https://img.shields.io/badge/Hackathon-Flip%20the%20Switch%202026-blueviolet?style=for-the-badge)](https://wemakedevs.org)
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=for-the-badge&logo=python)](https://python.org)
-[![Tests](https://img.shields.io/badge/Tests-46%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
-[![Architecture](https://img.shields.io/badge/Architecture-Switch%20Swarm-orange?style=for-the-badge)](SWITCH_SETUP.md)
+[![Tests](https://img.shields.io/badge/Tests-136%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
+[![Python](https://img.shields.io/badge/Python-3.9%20|%203.10%20|%203.11%20|%203.12%20|%203.13-blue?style=for-the-badge&logo=python)](https://python.org)
+[![Arithmetic](https://img.shields.io/badge/Arithmetic-Exact%20Decimal%20(No%20Floats)-brightgreen?style=for-the-badge)](AGENTS.md)
+[![Security](https://img.shields.io/badge/Security-Fail--Closed%20RBAC-red?style=for-the-badge)](docs/SECURITY_MODEL.md)
+[![Ledger](https://img.shields.io/badge/Ledger-Tamper--Evident%20SHA--256%20Chain-blueviolet?style=for-the-badge)](tools/audit_ledger.py)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ---
 
-## 📌 Executive Summary
+## 📌 Executive Overview
 
-Small and medium businesses silently lose **3% to 7% of vendor spend** to billing errors, price drift, and repetitive line-item overcharges. Invoices arrive as unstructured text or PDFs, staff approve them under time pressure without cross-referencing Master Service Agreements (MSAs), and **nobody remembers what the vendor promised last time**.
+Small and medium enterprises lose **3% to 7% of direct spend** to invoice errors, pricing creep, and repeated vendor overbilling. Traditional software either requires costly ERP customizations or relies on probabilistic LLM agents that hallucinate arithmetic, skip verification steps, or treat plain text chat handles as financial authorization.
 
-Standard AI approaches fail here:
-- **LLMs hallucinate arithmetic**: When asked to multiply quantities and calculate percentage variances, language models make floating-point and rounding errors.
-- **Autonomous agents break trust**: Connecting an LLM directly to SMTP or payment APIs risks sending aggressive dispute emails or making unauthorized financial disbursements.
-- **Siloed contexts lose memory**: Once a chat session closes, the context of previous credit notes and repeat disputes is permanently lost.
+**Overcharge Desk** replaces fragile autonomous LLM actions with a **deterministic financial verification engine** wrapped in a **cryptographic authorization gateway** and a **tamper-evident audit ledger**:
 
-**Overcharge Desk solves this with a collaborative agent room inside Switch:**
-1. **Probabilistic Language, Deterministic Math**: LLMs extract document semantics and draft dispute explanations. All monetary calculations are performed by hardened Python `Decimal` algorithms with 46 automated tests.
-2. **Cryptographic Human-in-the-Loop**: No dispute is recorded, and no payment is adjusted without an explicit owner command cryptographically bound to the exact audit hash.
-3. **Persistent Memory Across Agent Restarts**: An append-only vendor ledger tracks dispute history, credit note promises, and repeat offenses that persist even if agent sessions are terminated and recreated.
-4. **Zero-Trust Blast Radius**: The system has **no email tools, no payment credentials, and no external write access**. It outputs structured drafts for human review.
+1. **Zero LLM Arithmetic**: All price checks, variance calculations, and subtotal aggregations use `decimal.Decimal` with explicit half-up rounding (`ROUND_HALF_UP`) to two decimal places. Floating-point calculations are strictly forbidden.
+2. **Fail-Closed Verification**: Invoices exhibiting internal arithmetic mismatches ($Qty \times Price \neq LineTotal$) or missing source documents immediately trigger `BLOCKED` status, preventing any automated payment recommendation.
+3. **Cryptographic Approval Binding**: Human approvals require full 64-character SHA-256 digests binding `(case_id, invoice_number, invoice_sha256, contract_id, compare_sha256, audit_sha256, decision, authenticated_actor)`. No 8-character abbreviations.
+4. **Tamper-Evident SQLite Audit Ledger**: Every action forms an append-only, sequential cryptographic hash chain anchored by a genesis block (`0 * 64`). Any historical modification, reordering, or deletion is detected.
+5. **Three-Tier Output Control**: Artifacts are strictly segregated into `corrected_payment.csv` (100% verified), `partial_review.csv` (investigation only, no final settlement), and `blocked_review_report.csv` (discrepancy facts only, zero payable fields).
 
 ---
 
-## 🏗 System Architecture & Agent Swarm
-
-Inside the shared **Switch room** (powered by Mattermost), three distinct AI agents collaborate on a shared filesystem with the business owner:
+## 🏗 System Architecture
 
 ```
-                            [ INCOMING INVOICE ]
-                                      │
-                                      ▼
-                        ┌───────────────────────────┐
-                        │   Switch Team Room        │
-                        │   (Mattermost / Context)  │
-                        └─────────────┬─────────────┘
-                                      │
-            ┌─────────────────────────┼─────────────────────────┐
-            ▼                         ▼                         ▼
-   ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-   │  READER Agent   │       │  AUDITOR Agent  │       │  WRITER Agent   │
-   │  (Claude Code)  │       │ (OpenAI Codex)  │       │  (Claude Code)  │
-   └────────┬────────┘       └────────┬────────┘       └────────┬────────┘
-            │                         │                         │
-     1. Ingests file          2. Matches vendor & MSA    4. Verifies owner ID
-     2. Extracts text            via tools/compare.py    5. Validates SHA hash
-     3. Computes SHA-256      3. Queries past cases      6. Commits to ledger
-     4. Validates schema         (surfaces CN-114)       7. Outputs draft email
-            │                         │                     & payment sheet
-            ▼                         ▼                         ▼
-   cases/<id>/invoice.json   cases/<id>/audit.json     cases/<id>/dispute_email.md
-                             cases/<id>/compare.json   cases/<id>/corrected_payment.csv
-                                      │
-                                      ▼
-                         ┌───────────────────────────┐
-                         │   HUMAN BUSINESS OWNER    │
-                         │   APPROVE <id> <sha_hash> │
-                         │   REJECT  <id> <reason>   │
-                         └───────────────────────────┘
-```
-
-### The Agent Roster
-
-| Agent | Engine / Model | Core Responsibility | Files Allowed to Write | Strict Guardrails |
-|---|---|---|---|---|
-| **`READER`** | Anthropic Claude Code | Ingests raw invoices, extracts line items, validates schema. | `cases/<id>/invoice.json` | Never judges correctness; never writes to `vendors/` or `contracts/`; replaces unreadable values with `null`. |
-| **`AUDITOR`** | OpenAI Codex | Matches vendor contracts, queries historical cases, identifies variances. | `cases/<id>/audit.json`<br>`cases/<id>/compare.json` | **Zero mental math**: must call `tools/compare.py`; cannot approve findings; cannot modify the ledger. |
-| **`WRITER`** | Anthropic Claude Code | Validates owner signature, updates ledger, drafts dispute artifacts. | `cases/<id>/ledger_record.json`<br>`cases/<id>/dispute_email.md`<br>`cases/<id>/corrected_payment.csv`<br>`vendors/<id>.json` | Only acts on exact owner syntax; mutates ledger **only** via `tools/ledger.py`; no outbound communications. |
-| **`OWNER`** | Human Supervisor | Final business decision-maker. | N/A (Room messages) | Holds absolute authority. Can `APPROVE`, `REJECT`, or record vendor phone calls via `OUTCOME`. |
-
----
-
-## 🔎 Walkthrough: The Acme Overcharge Scenario
-
-Here is how Overcharge Desk handles a real-world synthetic overbilling scenario:
-
-### 1. Ingestion (`READER`)
-The owner drops invoice `invoices/acme-inv-1103.txt` into the Switch channel.
-- `READER` generates sequential case ID `OC-20261106-01` via `tools/next_case_id.py`.
-- Computes SHA-256 fingerprint of the original raw invoice (`tools/sha.py`).
-- Parses 2 line items and runs `tools/check_invoice.py` to ensure schema integrity:
-  - **Line 1**: 500 Corrugated cartons (CC-5) @ ₹112.00 = ₹56,000
-  - **Line 2**: 40 Pallet wrap rolls @ ₹250.00 = ₹10,000
-- Hands off structured `invoice.json` to the room.
-
-### 2. Contract Compliance & Memory Cross-Check (`AUDITOR`)
-`AUDITOR` picks up the handoff:
-1. **Contract Rate Verification**: Calls `python tools/compare.py cases/OC-20261106-01/invoice.json vendors/acme.json`:
-   - Contract rate for CC-5 is **₹100.00** (Schedule A, item 1).
-   - Invoiced rate is **₹112.00** ➔ **+12% variance (+₹12.00/unit)**.
-   - Total line variance: **₹6,000.00 overcharge**.
-   - Pallet wrap rate matches contract rate (₹250.00) exactly.
-2. **Long-Term Memory Search**: Scans historical cases in `vendors/acme.json`:
-   - Finds **Case 1 (`OC-20260914-01`)**: Vendor overbilled ₹2,400 on the same carton item in September.
-   - Finds owner outcome note: *"Vendor acknowledged by phone, credit note **CN-114** promised for ₹2,400"*.
-3. **Audit Report**: Publishes `cases/OC-20261106-01/audit.json` with hash `a8f2d3e910b4...`:
-   > *"Repeat variance detected: Acme overbilled carton-cc5 by ₹12/unit (₹6,000 total, 12% over contract). Second occurrence. Prior case OC-20260914-01 resulted in unapplied credit note token CN-114."*
-
-### 3. Human Gatekeeper Decision (`OWNER`)
-The owner reviews the findings in Mattermost and types:
-```text
-APPROVE OC-20261106-01 a8f2d3e9
-```
-*Note*: The owner provides the first 8–12 characters of the audit hash. If the audit file was modified or re-generated, the hash check fails and `WRITER` refuses to proceed.
-
-### 4. Dispute Resolution & Disbursement (`WRITER`)
-`WRITER` verifies that:
-- The command sender is the genuine `@owner`.
-- The audit hash matches `tools/sha.py cases/OC-20261106-01/audit.json`.
-- No existing ledger entry exists for this case ID.
-
-Once verified, `WRITER`:
-1. Commits an immutable record to `vendors/acme.json` using `tools/ledger.py`.
-2. Generates `cases/OC-20261106-01/dispute_email.md`:
-   ```markdown
-   Subject: Billing Discrepancy - Invoice INV-1103 (Contract ACME-2026-01)
-   Status: DRAFT - NOT SENT (Human Review Required)
-
-   Dear Acme Accounts Team,
-   
-   During audit of invoice INV-1103 (dated 2026-11-03), we identified a rate variance:
-   - Line 1: Corrugated carton 5-ply (CC-5) billed at ₹112.00 vs contract rate of ₹100.00
-     (Schedule A, item 1). Total discrepancy: ₹6,000.00.
-   - Note: This is the second instance of this variance following Case OC-20260914-01,
-     where credit note CN-114 was agreed.
-
-   We have approved payment of ₹60,000.00 and withheld the disputed ₹6,000.00.
-   ```
-3. Generates `cases/OC-20261106-01/corrected_payment.csv`:
-   ```csv
-   item_key,description,quantity,contract_rate,invoiced_rate,billed_amount,approved_payout,variance_withheld
-   carton-cc5,Corrugated carton 5-ply,500,100.00,112.00,56000.00,50000.00,6000.00
-   pallet-wrap,Pallet wrap roll,40,250.00,250.00,10000.00,10000.00,0.00
-   TOTAL,,,,"",66000.00,60000.00,6000.00
-   ```
-
----
-
-## 🛡️ Truth & Verification Matrix
-
-In mission-critical agent workflows, claims must be separated into what is **mechanically enforced by code/OS** versus what is **guided by LLM prompt instruction**:
-
-| Security / Safety Guarantee | Status | Enforcement Mechanism | Verification Method |
-|---|---|---|---|
-| **Deterministic Currency Arithmetic** | **ENFORCED** | Python `Decimal` fixed-point math (`tools/compare.py`) | 46 unit tests in `make test` test boundary and floating-point errors |
-| **Append-Only Vendor Ledger** | **ENFORCED** | Atomic file replacement + duplicate check (`tools/ledger.py`) | Direct write attempts without tool are rejected |
-| **No Outbound Leakage / Spurious Sends** | **ENFORCED** | Zero SMTP, HTTP client, or webhook credentials in runtime container | Environment audit confirms no network tools exist |
-| **Tamper-Evident Approval** | **ENFORCED** | SHA-256 fingerprint verification (`tools/sha.py`) | Modifying `audit.json` invalidates approval command |
-| **Strict Sequential Case IDs** | **ENFORCED** | Date-prefixed regex validator (`tools/next_case_id.py`) | Guaranteed format `OC-YYYYMMDD-XX` |
-| **Single-Agent Ledger Mutation** | **INSTRUCTED** | `READER` and `AUDITOR` system prompts forbid writing to `vendors/` | Verified via `git diff vendors/` during test runs |
-| **Owner-Only Command Authorization** | **INSTRUCTED / SWITCH** | Writer validates `@owner` handle in Switch message stream | Tested during Day-1 Switch channel configuration |
-
----
-
-## 📂 Repository Blueprint
-
-```
-overcharge-desk/
-├── agents/                     # Switch agent personas and instructions
-│   ├── READER.md               # Invoice extraction, OCR normalization, and schema checks
-│   ├── AUDITOR.md              # Contract rate matching, ledger memory cross-referencing
-│   └── WRITER.md               # Owner signature check, atomic ledger updates, artifact drafts
-│
-├── tools/                      # Hardened Python 3.9+ standard library CLI tools
-│   ├── compare.py              # Exact Decimal variance engine (invoiced vs contract)
-│   ├── ledger.py               # Atomic, append-only vendor database manager
-│   ├── check_invoice.py        # Invoice schema validator and mathematical integrity checker
-│   ├── payment_sheet.py        # Generates corrected reconciliation CSVs
-│   ├── next_case_id.py         # Sequential date-based case generator (OC-YYYYMMDD-NN)
-│   ├── sha.py                  # Cryptographic SHA-256 hashing for documents and audits
-│   ├── now.py                  # Standardized ISO-8601 UTC timestamp provider
-│   └── common.py               # Shared atomic IO, Decimal conversions, error types
-│
-├── contracts/                  # Synthetic vendor agreements
-│   └── acme-contract.md        # Acme Supplies Master Service Agreement & Schedule A rates
-│
-├── vendors/                    # Active vendor ledger & memory store
-│   └── acme.json               # Contract rates + immutable historical case records
-│
-├── seed/                       # Pristine seed ledger for demo resets
-│   └── acme.json               # Empty case history for clean test runs
-│
-├── invoices/                   # Synthetic test invoice documents
-│   ├── acme-inv-0914.txt       # Case 1 baseline invoice (with ₹2,400 overcharge)
-│   └── acme-inv-1103.txt       # Case 2 demo invoice (with ₹6,000 repeat overcharge)
-│
-├── cases/                      # Audit case directories generated by agents
-│   └── .gitkeep                # One folder per case: OC-YYYYMMDD-NN/
-│
-├── tests/                      # Automated test suite (pytest)
-│   ├── conftest.py             # Fixtures and temporary directory sandboxing
-│   ├── test_compare.py         # Unit tests for rate variance, tolerances, currencies
-│   ├── test_tools.py           # Unit tests for ledger, sha, now, check_invoice
-│   └── fixtures/               # Mock invoice payloads for automated CI
-│
-├── DEMO_SCRIPT.md              # 2-minute live demo runbook and memory proof checklist
-├── SWITCH_SETUP.md             # Guide for provisioning Mattermost and Switch console
-├── Makefile                    # Automation shortcuts (make test, make reset-demo)
-└── requirements-dev.txt        # Development dependencies (pytest)
+                       [ INCOMING INVOICE ]
+                                 │
+                                 ▼
+                     ┌───────────────────────┐
+                     │   Evidence Registry   │ (tools/evidence.py)
+                     │   Full SHA-256 Intake │
+                     └───────────┬───────────┘
+                                 │
+                                 ▼
+                     ┌───────────────────────┐
+                     │ Financial Verification│ (tools/compare.py)
+                     │ Exact Decimal Engine  │
+                     └───────────┬───────────┘
+                                 │
+          ┌──────────────────────┼──────────────────────┐
+          ▼                      ▼                      ▼
+    [ VERIFIED ]       [ REVIEW_REQUIRED ]        [ BLOCKED ]
+    (100% matched,       (Uncontracted SKU,       (Math mismatch,
+     sound math)          ambiguous desc)          tampered hash)
+          │                      │                      │
+          │                      ▼                      ▼
+          │             partial_review.csv      blocked_review_report.csv
+          │             (Investigation only)    (Zero payable fields)
+          │
+          ▼
+┌───────────────────────────┐
+│   Authorization Gateway   │ (tools/approval_gateway.py)
+│  HMAC-SHA-256 RBAC Token  │
+│  Cryptographic Receipt    │ (tools/approval_receipt.py)
+└─────────────┬─────────────┘
+              │
+              ▼
+┌───────────────────────────┐
+│ SQLite Audit Ledger       │ (tools/audit_ledger.py)
+│ Append-Only Hash Chain    │
+└─────────────┬─────────────┘
+              │
+              ▼
+    corrected_payment.csv
+    (Contract payable amounts & withheld sums)
 ```
 
 ---
 
-## 🛠️ Deterministic Tool Suite
+## 🛡 Core Engineering Invariants (AGENTS.md)
 
-Every calculation, state change, and validation in Overcharge Desk is powered by dedicated CLI utilities using **Python 3.9+ standard library only** (no external runtime dependencies):
-
-### 1. `compare.py` — The Financial Engine
-Performs line-by-line reconciliation between an extracted `invoice.json` and a vendor's contract rates:
-```bash
-python tools/compare.py cases/OC-20261106-01/invoice.json vendors/acme.json --out cases/OC-20261106-01/compare.json
-```
-*Outputs contract price, billed price, per-unit variance, line variance, percentage drift, and overall withheld totals in exact decimals.*
-
-### 2. `ledger.py` — Atomic State Persistence
-Appends verified case records to the vendor database with file replacement guarantees:
-```bash
-python tools/ledger.py add-case vendors/acme.json --record cases/OC-20261106-01/ledger_record.json
-```
-*Prevents duplicate cases, blocks retroactive tampering, and records automated timestamps.*
-
-### 3. `check_invoice.py` — Pre-Flight Sanitizer
-Validates that an invoice file adheres to the required schema and verifies the vendor's internal math:
-```bash
-python tools/check_invoice.py cases/OC-20261106-01/invoice.json --update
-```
-
-### 4. `payment_sheet.py` — Financial Disbursement Sheet
-Transforms comparison results into a formal payment reconciliation CSV:
-```bash
-python tools/payment_sheet.py cases/OC-20261106-01/compare.json cases/OC-20261106-01/corrected_payment.csv
-```
+| Category | Invariant | Mechanical Enforcement |
+|---|---|---|
+| **Financial** | Mandatory Exact Decimal Arithmetic | `decimal.Decimal` with `ROUND_HALF_UP` on every line; floats raise `TypeError` or `ToolError`. |
+| **Financial** | Source Invoice Truth Preservation | Source extracted values are never silently rounded or normalized to force passing. |
+| **Financial** | Discrepancy Quarantine | Internal arithmetic errors ($Qty \times Price \neq LineTotal$) trigger `STATUS_SOURCE_DISCREPANCY` and set system to `BLOCKED`. |
+| **Evidence** | Universal Source Referencing | Every line item and variance references immutable locators (`invoices/acme-inv-1103.txt#line-1`). |
+| **Evidence** | Cryptographic Fingerprinting | Raw source artifacts are fingerprinted with full 64-character SHA-256 digests upon registration. |
+| **Security** | Fail-Closed Authorization | Missing, stale, or unauthenticated identities cause immediate refusal with exit code 4. |
+| **Security** | Full 64-char Hash Digest Requirement | Shortened hash prefixes (e.g. 8-char) are rejected. Receipts bind all artifact digests into HMAC signatures. |
+| **Ledger** | Tamper-Evident Hash Chain | Each event incorporates `previous_event_hash` in its canonical SHA-256 digest, starting from genesis. |
 
 ---
 
 ## 🚀 Quickstart & Installation
 
-### Prerequisites
-- **Python**: 3.9 or higher
-- **Docker**: For running Switch and Mattermost local containers
-- **Switch CLI & Console**: Configured per the hackathon quickstart guide
+### Requirements
+- Python 3.9+ (Standard Library only; no external runtime dependencies).
+- `pytest` for running the automated test suite.
 
-### 1. Clone & Set Up Environment
+### Setup
 ```bash
+# Clone the repository
 git clone https://github.com/theninthfoundry/overcharge-desk.git
 cd overcharge-desk
 
 # Install test dependencies
-python3 -m pip install -r requirements-dev.txt
+pip install -r requirements-dev.txt
+
+# Run full test suite (136 tests)
+python -m pytest -v
 ```
-
-### 2. Run Test Suite
-Verify that all 46 unit tests pass:
-```bash
-make test
-# or: pytest -v tests/
-```
-
-### 3. Test Standalone Tools (No Agents Required)
-You can test the entire pipeline directly from your terminal:
-```bash
-# 1. Generate next case ID
-python3 tools/next_case_id.py
-
-# 2. Compare sample invoice fixture against Acme contract
-python3 tools/compare.py tests/fixtures/example_invoice.json vendors/acme.json
-
-# 3. Check SHA fingerprint of an invoice
-python3 tools/sha.py invoices/acme-inv-1103.txt
-```
-
-### 4. Reset Demo State
-To restore the repository to a clean state for live demos:
-```bash
-make reset-demo
-```
-*Deletes all created `cases/OC-*` folders and restores `vendors/acme.json` from `seed/acme.json`.*
 
 ---
 
-## 🎬 The 2-Minute Demo: Proving Long-Term Memory
+## 🧪 The Four Benchmark Demo Cases
 
-In a live evaluation, the most critical question is: **Does the swarm actually have persistent memory, or is it merely re-reading context in a long prompt window?**
+Overcharge Desk includes 4 reference test cases demonstrating the complete lifecycle:
 
-Overcharge Desk proves persistent memory through a two-step demonstration:
+### Case A: Clean Match (`cases/demo-clean`)
+- **Invoice**: 200 cartons @ ₹100.00 + 40 rolls @ ₹250.00 = ₹30,000.00.
+- **Contract**: Exactly matches Schedule A rates.
+- **Outcome**: `VERIFIED`, ₹30,000.00 payable, ₹0.00 withheld.
+- **Receipt**: Signed approval receipt `AR-OC-20261001-01-...` issued.
 
-1. **Pre-Demo Preparation (Cold Storage Proof)**:
-   - Case 1 (`INV-0914`) is run hours before filming. The owner enters an outcome:  
-     `OUTCOME OC-20260914-01 Vendor acknowledged by phone, credit note CN-114 promised for ₹2,400`
-   - **All agent sessions are terminated.** Context windows are erased.
-2. **Live Demonstration**:
-   - Fresh agent sessions are spawned with completely empty contexts.
-   - The owner uploads Case 2 (`acme-inv-1103.txt`).
-   - `AUDITOR` inspects the vendor ledger, automatically detects that this is the **second time** Acme has overbilled for the exact same item, and cites credit note **`CN-114`**.
-   - Because the agents were restarted, this information could **only** have originated from the persistent vendor ledger.
+### Case B: Acme Overcharge (`cases/demo-overcharge`) — Benchmark ₹6,000 Variance
+- **Invoice**: 500 cartons @ ₹112.00 (₹56,000) + 40 rolls @ ₹250.00 (₹10,000) = ₹66,000.00.
+- **Contract**: Schedule A CC-5 rate is ₹100.00 (+12% overcharge).
+- **Outcome**: `VERIFIED`, ₹60,000.00 payable, **₹6,000.00 withheld**.
+- **Action**: Owner approves contract rate payout with variance withheld; outputs `corrected_payment.csv`.
+
+### Case C: Commercial Review Required (`cases/demo-review`)
+- **Invoice**: 500 cartons @ ₹100.00 + 100 uncontracted straps @ ₹45.00 = ₹54,500.00.
+- **Outcome**: `REVIEW_REQUIRED`, routes strictly to `partial_review.csv`.
+- **Safety**: Refuses to generate final payment sheet without human contract amendment.
+
+### Case D: Tampered / Arithmetic Discrepancy (`cases/demo-blocked`)
+- **Invoice**: 500 cartons @ ₹112.00, but line total written as ₹58,000.00 (math mismatch).
+- **Outcome**: `BLOCKED`, routes to `blocked_review_report.csv`.
+- **Safety**: Zero payable fields emitted; Authorization Gateway refuses approval fail-closed.
+
+### Running the End-to-End Demo Suite
+```bash
+python tools/run_demo_suite.py --clean
+```
 
 ---
 
-## ⚠️ Known Limitations & Scope Boundaries
+## 🧰 CLI Tool Reference
 
-- **Synthetic Data**: All vendor profiles, contract terms, amounts, and dispute templates in this repository are synthetic and created for educational and hackathon demonstration purposes.
-- **Text & Structured Documents Only**: Built for text and structured invoices. Scanned image PDFs require an OCR preprocessing layer before ingestion by the Reader.
-- **Contract Rates vs Physical Deliveries**: The system verifies billing against rate schedules; it does not verify warehouse physical receiving slips, shipping waybills, or verbal rate amendments.
-- **Dispute Drafts Only**: The system strictly prepares drafts (`dispute_email.md`). It deliberately does not automate sending emails or interacting with banking gateways.
+### 1. Invoice Validation (`tools/check_invoice.py`)
+Validates schema structure, source file presence, and mathematical parity:
+```bash
+python tools/check_invoice.py cases/demo-overcharge/invoice.json --strict
+```
+
+### 2. Rate Comparison Engine (`tools/compare.py`)
+Deterministic contract rate verification (schema 2.0.0) with companion digest:
+```bash
+python tools/compare.py cases/demo-overcharge/invoice.json vendors/acme.json --out compare.json --save-digest
+```
+
+### 3. Independent Comparison Validator (`tools/validate_comparison.py`)
+Independent auditor verifying schema, decimal arithmetic, and companion SHA-256 digests:
+```bash
+python tools/validate_comparison.py compare.json --digest compare.json.sha256 --strict
+```
+
+### 4. Actor Model & Token Authentication (`tools/auth.py`)
+Issues and validates HMAC-SHA-256 tokens for role-based access:
+```bash
+# Issue 5-minute token for owner
+python tools/auth.py issue-token owner
+
+# Verify token validity
+python tools/auth.py verify-token "<token>"
+```
+
+### 5. Authorization Gateway (`tools/approval_gateway.py`)
+Validates actor identity, re-verifies evidence on disk, and signs approval receipts:
+```bash
+# Approve case with exact payable amount check
+python tools/approval_gateway.py approve cases/demo-overcharge --token "<owner_token>" --amount 60000.00
+
+# Reject case with required owner rationale
+python tools/approval_gateway.py reject cases/demo-overcharge --token "<owner_token>" --reason "Supplier agreed to reissue"
+```
+
+### 6. Tamper-Evident SQLite Ledger (`tools/audit_ledger.py` & `tools/verify_ledger.py`)
+Append-only cryptographic event logging:
+```bash
+# Verify complete hash chain from genesis to head
+python tools/verify_ledger.py --strict
+```
+
+### 7. Controlled Pipeline Orchestrator (`tools/pipeline.py`)
+Runs the full 13-stage controlled reconciliation flow:
+```bash
+python tools/pipeline.py cases/demo-overcharge/invoice.json vendors/acme.json out_dir/ --strict
+```
 
 ---
 
-## 👥 Built For
-Built for the **Flip the Switch Hackathon**  
-*Organized by WeMakeDevs × DevTools Academy × Switch*  
-**November 2026**
+## 📊 Test Suite & Verification Matrix
 
-<!-- Truth and verification matrix cross-check complete -->
+The test suite covers **136 automated test cases** across 8 test modules:
 
-<!-- Quickstart examples validated -->
+```text
+tests/test_audit_ledger.py              8 passed (Genesis, hash links, tampering detection, reordering)
+tests/test_auth_and_approval.py         15 passed (HMAC tokens, TTL, role permissions, signed receipts)
+tests/test_boundary_audit.py            20 passed (3-tier artifact model, path traversal, injection)
+tests/test_case_manager_and_evidence.py  8 passed (Directory layout, state transitions, SHA-256 tracking)
+tests/test_compare.py                   21 passed (Decimal precision, rounding, SKU boundaries, dates)
+tests/test_financial_adversarial.py     35 passed (Invalid numbers, negative quantities, formula injection)
+tests/test_pipeline_orchestration.py     3 passed (Execution manifests, approval enforcement, recovery)
+tests/test_tools.py                     25 passed (CLI utilities, error exits, seed parity)
+tests/test_demo_cases.py                 1 passed (Full 4-case end-to-end benchmark suite)
+-----------------------------------------------------------------------------------------------------
+TOTAL: 136 passed in ~5 seconds
+```
 
-<!-- Architectural handoff diagrams finalized -->
+---
 
-<!-- v1.0 Milestone release verified -->
+## 🔒 Security & Trust Boundaries
+
+> [!IMPORTANT]
+> - **HMAC-SHA-256 Signatures**: Authenticate that the token or receipt was created by an entity in possession of the shared signing key. They do not provide cryptographic non-repudiation.
+> - **Tamper-Evident Ledger**: The SQLite hash chain detects accidental corruption, row reordering, and unauthorized updates. A party with direct file access could recalculate the chain from a tampered node forward; external periodic checkpointing or remote append-only logging is recommended for untrusted host environments.
+> - **Spreadsheet Formula Injection**: All CSV exports sanitize leading characters (`=`, `+`, `-`, `@`, `\t`, `\r`) with single quotes to prevent code execution when opened in Excel or Google Sheets.
+
+---
+
+## 📄 License
+
+MIT License. See [LICENSE](LICENSE) for details.

@@ -1,217 +1,148 @@
-# Architecture Specification: Overcharge Desk
+# ARCHITECTURE.md — Overcharge Desk Technical Architecture
 
-**Version**: 1.1 (Phase 1 Canonical Architecture)  
-**System Type**: Evidence-First Deterministic Vendor Reconciliation System  
-**Target Environment**: Python 3.9+ (Standard Library Runtime), Switch/Mattermost Collaboration Gateway
-
----
-
-## 1. Product Purpose
-
-Overcharge Desk is an evidence-first vendor reconciliation and dispute management system. It enables businesses to systematically cross-examine inbound vendor invoices against contractual Master Service Agreements (MSAs), cross-reference persistent historical dispute records, obtain cryptographically bound human-in-the-loop approvals, and produce deterministic dispute resolution packages.
-
-### Primary Objectives
-- **Zero Hallucination Arithmetic**: Prevent language models from executing or modifying financial mathematics.
-- **Traceable Evidentiary Chain**: Bind every variance, rate discrepancy, or credit note claim to an explicit file and line locator.
-- **Fail-Closed Human Governance**: Guarantee that no funds are disbursed, no dispute emails are transmitted, and no vendor ledgers are altered without authentic human supervisor approval.
+> **System**: Overcharge Desk — Evidence-First Vendor Reconciliation & Cryptographic Payment Control  
+> **Version**: 2.1.0  
+> **Authority**: [AGENTS.md](file:///d:/overcharge%20files/AGENTS.md)
 
 ---
 
-## 2. System Architecture & Boundaries
+## 1. High-Level Architecture Overview
 
-The architecture strictly decouples **probabilistic semantic extraction** (performed by LLMs) from **deterministic computation and state management** (performed by Python CLI tools):
+Overcharge Desk is designed as a **fail-closed, evidence-first payment control pipeline**. It separates non-deterministic language extraction from deterministic arithmetic verification, independent comparison auditing, cryptographic human authorization, and tamper-evident append-only ledgering.
 
-```
-                        ┌──────────────────────────────────────┐
-                        │   INCOMING RAW INVOICE (Text/JSON)   │
-                        └──────────────────┬───────────────────┘
-                                           │
-                                           ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                SWITCH COLLABORATION ROOM                               │
-│                                                                                        │
-│   ┌─────────────────────┐      ┌─────────────────────┐      ┌─────────────────────┐   │
-│   │    READER Agent     │      │    AUDITOR Agent    │      │    WRITER Agent     │   │
-│   │    (Claude Code)    │      │   (OpenAI Codex)    │      │    (Claude Code)    │   │
-│   └──────────┬──────────┘      └──────────┬──────────┘      └──────────┬──────────┘   │
-│              │                            │                            │              │
-│       1. Ingests file              3. Matches vendor            5. Checks signature   │
-│       2. Validates schema             & active rates            6. Emits dispute      │
-│       3. Hashes source             4. Queries history              package drafts     │
-└──────────────┼────────────────────────────┼────────────────────────────┼──────────────┘
-               │                            │                            │
-               ▼                            ▼                            ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                        LOCAL DETERMINISTIC CLI TOOLING LAYER                           │
-│                                                                                        │
-│   ┌──────────────────────┐     ┌──────────────────────┐     ┌──────────────────────┐   │
-│   │ check_invoice.py     │     │ compare.py           │     │ ledger.py            │   │
-│   │ - Schema validation  │     │ - Decimal math (q2)  │     │ - Append-only ledger │   │
-│   │ - Math parity check  │     │ - Rate lifecycle     │     │ - Outcome tracking   │   │
-│   │ - Fingerprinting     │     │ - Variance isolation │     │ - Duplicate rejection│   │
-│   └──────────────────────┘     └──────────────────────┘     └──────────────────────┘   │
-│   ┌──────────────────────┐     ┌──────────────────────┐     ┌──────────────────────┐   │
-│   │ sha.py               │     │ next_case_id.py      │     │ payment_sheet.py     │   │
-│   │ - SHA-256 digests    │     │ - Sequential IDs     │     │ - Formula escaping   │   │
-│   │ - Artifact hashes    │     │ - Format: OC-Date-NN │     │ - Tabular CSV output │   │
-│   └──────────────────────┘     └──────────────────────┘     └──────────────────────┘   │
-└───────────────────────────────────────────┬────────────────────────────────────────────┘
-                                            │
-                                            ▼
-                         ┌─────────────────────────────────────┐
-                         │      CASES ARTIFACT REPOSITORY      │
-                         │ cases/<id>/invoice.json             │
-                         │ cases/<id>/compare.json             │
-                         │ cases/<id>/audit.json               │
-                         │ cases/<id>/ledger_record.json       │
-                         │ cases/<id>/dispute_email.md         │
-                         │ cases/<id>/corrected_payment.csv    │
-                         └─────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Intake ["1. Document Intake & Preservation"]
+        Raw["Raw Source Invoice (.txt / .pdf)"]
+        Contract["Vendor Contract / MSA (.md)"]
+        EvReg["Evidence Registry (evidence.py)"]
+        Raw --> EvReg
+        Contract --> EvReg
+    end
+
+    subgraph Verification ["2. Deterministic Verification Engine"]
+        InvChk["Invoice Validator (check_invoice.py)"]
+        Compare["Deterministic Comparison (compare.py)"]
+        ValComp["Independent Auditor (validate_comparison.py)"]
+        EvReg --> InvChk
+        InvChk --> Compare
+        Compare --> ValComp
+    end
+
+    subgraph Routing ["3. Three-Tier Output Segregation"]
+        ValComp --> State{"System Verification State"}
+        State -->|BLOCKED| BlkRep["blocked_review_report.csv<br>(Zero payable fields)"]
+        State -->|REVIEW_REQUIRED| PartRev["partial_review.csv<br>(Investigation artifact)"]
+        State -->|VERIFIED| Gate{"Authorization Gateway"}
+    end
+
+    subgraph Authorization ["4. Cryptographic Authorization Gateway"]
+        Owner["Authenticated Human Owner"]
+        TokenAuth["HMAC-SHA-256 Token Auth (auth.py)"]
+        AppGate["Approval Gateway (approval_gateway.py)"]
+        Receipt["Signed Approval Receipt (approval_receipt.py)"]
+        Owner --> TokenAuth
+        TokenAuth --> AppGate
+        Gate --> AppGate
+        AppGate --> Receipt
+    end
+
+    subgraph Ledger ["5. Tamper-Evident Audit Ledger"]
+        AppGate --> SQLite["SQLite Append-Only Ledger (audit_ledger.py)"]
+        SQLite --> HashChain["SHA-256 Hash Chain (Genesis to Head)"]
+        VerLedger["Independent Verifier (verify_ledger.py)"]
+        HashChain -.-> VerLedger
+    end
+
+    subgraph Settlement ["6. Authorized Payment Recommendation"]
+        Receipt --> PaySheet["corrected_payment.csv<br>(Contract rates & withheld overcharges)"]
+        Manifest["Execution Manifest (manifest.json)"]
+        PaySheet --> Manifest
+    end
 ```
 
 ---
 
-## 3. Canonical Directory Structure
+## 2. Directory Structure & Case Organization
 
-Following the Phase 1 canonical consolidation, the single authoritative repository layout is:
+Cases are organized into standardized directories:
 
-```
-overcharge-desk/
-├── AGENTS.md                   # Permanent engineering and operational invariants
-├── Makefile                    # Root test and demo-reset automation
-├── pytest.ini                  # Authoritative pytest discovery configuration
-├── requirements-dev.txt        # Development dependencies (pytest)
-├── README.md                   # Project overview and executive specification
-├── SWITCH_SETUP.md             # Integration guide for Switch and Mattermost
-├── DEMO_SCRIPT.md              # 2-minute verification script and memory proof runbook
-│
-├── agents/                     # Agent system prompts and operational rules
-│   ├── READER.md               # Intake, text extraction, and schema enforcement rules
-│   ├── AUDITOR.md              # Contract cross-referencing and rate-matching rules
-│   └── WRITER.md               # Approval verification and artifact generation rules
-│
-├── tools/                      # Deterministic Python 3.9+ standard library tools
-│   ├── common.py               # Shared Decimal helpers, atomic IO, custom error types
-│   ├── check_invoice.py        # Invoice schema and mathematical parity validator
-│   ├── compare.py              # Exact Decimal variance and contract reconciliation engine
-│   ├── ledger.py               # Vendor history manager and atomic transaction logger
-│   ├── next_case_id.py         # Daily sequential case ID generator (OC-YYYYMMDD-NN)
-│   ├── now.py                  # Standardized ISO-8601 UTC timestamp utility
-│   ├── payment_sheet.py        # Formula-safe CSV payment sheet generator
-│   └── sha.py                  # Cryptographic SHA-256 fingerprinting utility
-│
-├── contracts/                  # Active vendor contracts and rate schedules
-│   └── acme-contract.md        # Acme Supplies Master Service Agreement and Schedule A
-│
-├── vendors/                    # Authoritative vendor ledger & historical memory
-│   └── acme.json               # Contract rate definitions and historical case entries
-│
-├── seed/                       # Pristine reference vendor database
-│   └── acme.json               # Seed ledger for `make reset-demo`
-│
-├── invoices/                   # Synthetic test invoices
-│   ├── acme-inv-0914.txt       # Case 1 baseline invoice (historical dispute)
-│   └── acme-inv-1103.txt       # Case 2 demo invoice (repeat overcharge scenario)
-│
-├── cases/                      # Output directory for investigated case folders
-│   └── .gitkeep                # One folder per investigation: cases/<case_id>/
-│
-├── tests/                      # Authoritative test suite
-│   ├── conftest.py             # Shared fixtures and sandboxed environment helpers
-│   ├── test_compare.py         # Rate matching, rounding, and variance unit tests
-│   ├── test_tools.py           # CLI tools, ledger append-only, and safety tests
-│   └── fixtures/               # Test mocks (example_invoice.json)
-│
-└── docs/                       # Core architectural and forensic documentation
-    ├── FORENSIC_AUDIT.md       # Phase 0 comprehensive audit findings
-    ├── ARCHITECTURE.md         # System architecture and data flow (this document)
-    ├── SECURITY_MODEL.md       # Threat boundaries, attack vectors, and mitigations
-    └── TEST_STRATEGY.md        # Comprehensive verification and test methodology
+```text
+cases/<case_id>/
+├── case.json               # Case metadata, lifecycle history & state transitions
+├── evidence_registry.json  # Cryptographic fingerprint registry of all intake files
+├── source/                 # Preserved raw documents (immutable read-only)
+├── normalized/             # Extracted JSON representations
+├── comparison/             # Deterministic comparison outputs
+│   ├── compare.json        # Schema 2.0.0 comparison result
+│   └── compare.json.sha256 # Companion canonical SHA-256 digest
+├── approvals/              # Human authorization records
+│   └── approval_receipt.json # Signed HMAC-SHA-256 approval receipt
+├── artifacts/              # Generated output CSVs
+│   ├── corrected_payment.csv     (Tier 1: VERIFIED only)
+│   ├── partial_review.csv        (Tier 2: REVIEW_REQUIRED only)
+│   └── blocked_review_report.csv (Tier 3: BLOCKED only)
+└── manifest.json           # Execution manifest for crash recovery & audit
 ```
 
 ---
 
-## 4. Actor Responsibilities & Boundaries
+## 3. Core Modules & Responsibilities
 
-| Actor | Engine / Runtime | Operational Scope | Permitted Writes | Strict Prohibitions |
-|---|---|---|---|---|
-| **`READER`** | Claude Code | Ingests raw invoices, extracts structured data, runs pre-flight checks. | `cases/<id>/invoice.json` | Cannot calculate contract variance; cannot write to `vendors/` or `contracts/`; cannot fill missing data with guesses. |
-| **`AUDITOR`** | OpenAI Codex | Matches contract rates by date and SKU; queries vendor ledger history; drafts audit findings. | `cases/<id>/audit.json`<br>`cases/<id>/compare.json` | **Zero mental arithmetic** (must call `compare.py`); cannot authorize disputes; cannot mutate the ledger. |
-| **`WRITER`** | Claude Code | Verifies owner signature; commits decision to ledger; drafts dispute artifacts. | `cases/<id>/ledger_record.json`<br>`cases/<id>/dispute_email.md`<br>`cases/<id>/corrected_payment.csv`<br>`vendors/<id>.json` | Cannot act without verified owner command; mutates ledger **only** through `tools/ledger.py`; no outbound communications. |
-| **`OWNER`** | Human Supervisor | Authorizes or rejects dispute recommendations. | Mattermost chat command | Holds exclusive business authority via `APPROVE` / `REJECT`. |
-
----
-
-## 5. End-to-End Data & Artifact Flow
-
-```
-[Raw Invoice] 
-      │ (tools/sha.py & tools/next_case_id.py)
-      ▼
-cases/<id>/invoice.json 
-      │ (tools/check_invoice.py --update)
-      ▼
-[Validated Invoice] + vendors/<vendor>.json
-      │ (tools/compare.py)
-      ▼
-cases/<id>/compare.json 
-      │ (Auditor cross-references vendor history)
-      ▼
-cases/<id>/audit.json
-      │ (tools/sha.py computes audit_sha256)
-      ▼
-[Owner APPROVE Command]
-      │ (Writer verifies identity & full 64-char hash)
-      ▼
-cases/<id>/ledger_record.json ──► (tools/ledger.py add-case) ──► vendors/<vendor>.json
-      │
-      ├──► cases/<id>/dispute_email.md (DRAFT - NOT SENT)
-      └──► cases/<id>/corrected_payment.csv (tools/payment_sheet.py)
-```
-
----
-
-## 6. Execution Entry Points
-
-All operations are executable directly from the repository root:
-
-1. **Calculate Invoice Variance**:
-   ```bash
-   python tools/compare.py cases/<case_id>/invoice.json vendors/acme.json --out cases/<case_id>/compare.json
-   ```
-2. **Validate Invoice Structure & Math**:
-   ```bash
-   python tools/check_invoice.py cases/<case_id>/invoice.json --update
-   ```
-3. **Generate Corrected Payment Sheet**:
-   ```bash
-   python tools/payment_sheet.py cases/<case_id>/compare.json cases/<case_id>/corrected_payment.csv
-   ```
-4. **Append Authorized Ledger Case**:
-   ```bash
-   python tools/ledger.py add-case vendors/acme.json --record cases/<case_id>/ledger_record.json
-   ```
-5. **Run Authoritative Test Suite**:
-   ```bash
-   make test
-   # or: python -m pytest
-   ```
-
----
-
-## 7. Current vs. Planned Architecture
-
-| Architectural Capability | Current Status (Phase 1) | Planned State (Phase 2–4) |
+| Module | Core Responsibility | Enforced Invariant |
 |---|---|---|
-| **Monetary Arithmetic** | Implemented (`Decimal`, `q2`, half-up) | Enhanced: strict handling of tax/freight exclusions |
-| **Line-Item Verification Statuses** | Binary (`matched` / `unmatched`) | Multi-state (`VERIFIED_MATCH`, `VERIFIED_OVERCHARGE`, `SOURCE_DISCREPANCY`, `UNMATCHED`, etc.) |
-| **Payment Sheet Discrepancy Gate** | Warning only; computes payable amount | Hard block: `SOURCE_DISCREPANCY` halts automated payment calculation |
-| **Approval Hash Validation** | 64-char regex check in ledger tool | End-to-end cryptographic binding to disk artifact and verified identity |
-| **Ledger Storage** | Atomic JSON file replacement | SQLite database with transactional constraints and event hash chaining |
-| **Case State Machine** | Implicit file existence | Explicit orchestrator states (`RECEIVED` ➔ `VALIDATED` ➔ `REVIEW` ➔ `RESOLVED`) |
-| **Traceable Decision Receipt** | None (separate markdown/CSV files) | Single verifiable `receipt.json` summarizing all artifact hashes |
+| [`tools/common.py`](file:///d:/overcharge%20files/tools/common.py) | Decimal utilities, safe rounding (`q2`), canonical serialization, path security. | Exact Decimal arithmetic, cross-platform path traversal rejection. |
+| [`tools/check_invoice.py`](file:///d:/overcharge%20files/tools/check_invoice.py) | Structural schema inspection, source digest verification, arithmetic parity. | Discrepancy quarantine, source preservation. |
+| [`tools/compare.py`](file:///d:/overcharge%20files/tools/compare.py) | Deterministic rate matching, SKU boundaries, rate-history selection, variance calculation. | Fail-closed blocking on math discrepancies; Schema 2.0.0 output. |
+| [`tools/validate_comparison.py`](file:///d:/overcharge%20files/tools/validate_comparison.py) | Independent comparison auditor validating line-level parity and totals consistency. | Defense-in-depth against poisoned or malformed comparison JSON. |
+| [`tools/evidence.py`](file:///d:/overcharge%20files/tools/evidence.py) | Registers and re-verifies raw files and artifacts via full 64-char SHA-256 digests. | Immutable source locators, tamper detection on disk. |
+| [`tools/auth.py`](file:///d:/overcharge%20files/tools/auth.py) | Actor registry, role permissions, time-bound HMAC-SHA-256 token issuance. | Fail-closed authentication, strict role-based access control. |
+| [`tools/approval_receipt.py`](file:///d:/overcharge%20files/tools/approval_receipt.py) | Generates and verifies cryptographic approval receipts binding all evidence digests. | Cryptographic binding of identity, decision, amounts, and hashes. |
+| [`tools/approval_gateway.py`](file:///d:/overcharge%20files/tools/approval_gateway.py) | Validates approval requests, checks on-disk evidence, verifies amounts, signs receipts. | Strict gatekeeping: blocks approval on BLOCKED audits or amount mismatches. |
+| [`tools/audit_ledger.py`](file:///d:/overcharge%20files/tools/audit_ledger.py) | SQLite transactional append-only ledger with continuous SHA-256 hash chaining. | Tamper-evident audit trail from genesis to head. |
+| [`tools/verify_ledger.py`](file:///d:/overcharge%20files/tools/verify_ledger.py) | Traverses SQLite ledger verifying every sequence, previous hash, and payload hash. | Immediate detection of modified, deleted, or reordered records. |
+| [`tools/pipeline.py`](file:///d:/overcharge%20files/tools/pipeline.py) | Controlled 13-stage verification, reconciliation, and payment authorization pipeline. | End-to-end orchestration, execution manifest generation, crash recovery. |
 
+---
 
-<!-- Architecture Section: Decoupled LLM extraction and deterministic math -->
+## 4. Case Lifecycle State Machine
 
-<!-- Architecture Section: Sequential case ID formatting and lifecycle -->
+```mermaid
+stateDiagram-v2
+    [*] --> CREATED
+    CREATED --> INTAKE_VERIFIED: Source SHA-256 verified
+    CREATED --> BLOCKED: Source missing/tampered
+
+    INTAKE_VERIFIED --> COMPARED: Deterministic compare executed
+    
+    COMPARED --> VERIFIED: 100% matched, math sound
+    COMPARED --> REVIEW_REQUIRED: Uncontracted / ambiguous SKU
+    COMPARED --> BLOCKED: Arithmetic discrepancy
+
+    VERIFIED --> APPROVAL_PENDING: Submitted to gateway
+    APPROVAL_PENDING --> APPROVED: Signed by APPROVER
+    APPROVAL_PENDING --> REJECTED: Rejected with reason
+    APPROVAL_PENDING --> BLOCKED: Evidence tampered on disk
+
+    APPROVED --> PAYMENT_GENERATED: corrected_payment.csv generated
+    PAYMENT_GENERATED --> CLOSED: Disbursed / archived
+    
+    REVIEW_REQUIRED --> CLOSED: Investigated / settled
+    BLOCKED --> CLOSED: Disputed / closed without payment
+    CLOSED --> [*]
+```
+
+---
+
+## 5. Ledger Hash Chain Mechanics
+
+Each event in the SQLite audit ledger (`ledger.db`) is cryptographically linked to its predecessor:
+
+$$\text{EventHash}_n = \text{SHA-256}\left(\text{canonical}\left(\begin{aligned}
+&\text{event\_id}_n, \, \text{seq}_n, \, \text{case\_id}_n, \, \text{event\_type}_n, \\
+&\text{actor\_id}_n, \, \text{timestamp}_n, \, \text{payload}_n, \, \text{refs}_n, \, \text{EventHash}_{n-1}
+\end{aligned}\right)\right)$$
+
+- **Genesis**: Event 1 has $\text{EventHash}_0 = 0^{64}$ (64 hexadecimal zeros).
+- **Append-Only Guarantee**: SQLite transactions with `BEGIN IMMEDIATE` ensure concurrent execution cannot create sequence gaps or fork the hash chain.
+- **Verification Complexity**: $O(N)$ sequential scan recalculating and validating every link.

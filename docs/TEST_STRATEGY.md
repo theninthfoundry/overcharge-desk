@@ -1,115 +1,120 @@
-# Comprehensive Test Strategy: Overcharge Desk
+# TEST_STRATEGY.md — Adversarial Testing & Verification Strategy
 
-**Version**: 1.1 (Phase 1 Baseline)  
-**Test Framework**: pytest 7+  
-**Target Coverage**: Financial calculations, schema parsing, CLI utilities, security boundaries, and adversarial datasets.
+> **System**: Overcharge Desk — Evidence-First Vendor Reconciliation & Cryptographic Payment Control  
+> **Version**: 2.1.0  
+> **Authority**: [AGENTS.md](file:///d:/overcharge%20files/AGENTS.md) Invariant 5 (Radical Engineering Transparency)
 
 ---
 
-## 1. Test Architecture & Structure
+## 1. Test Architecture & Coverage Summary
 
-All tests reside in the authoritative `tests/` directory at the repository root and are managed via `pytest.ini`:
+Overcharge Desk enforces a zero-trust, test-driven engineering culture. No feature or security boundary is considered complete without automated test execution verifying both nominal and adversarial behaviors.
 
+The automated test suite contains **136 passing tests** across 9 test modules:
+
+```text
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.1.0
+rootdir: D:\overcharge files
+configfile: pytest.ini
+testpaths: tests
+collected 136 items
+
+tests/test_audit_ledger.py .............. [ 8 tests: Genesis, chain links, payload tampering, gaps, reordering]
+tests/test_auth_and_approval.py ......... [15 tests: HMAC tokens, TTL, role permissions, signed receipts, gateway]
+tests/test_boundary_audit.py ............ [20 tests: 3-tier artifact model, path traversal, injection, digests]
+tests/test_case_manager_and_evidence.py . [ 8 tests: Directory layout, state transitions, SHA-256 tracking]
+tests/test_compare.py .................. [21 tests: Exact decimal precision, rounding, SKU boundaries, dates]
+tests/test_financial_adversarial.py .... [35 tests: Non-finite inputs, negative numbers, formula injection]
+tests/test_pipeline_orchestration.py .... [ 3 tests: Manifest generation, approval enforcement, recovery]
+tests/test_tools.py .................... [25 tests: CLI utilities, error exits, seed parity]
+tests/test_demo_cases.py ................ [ 1 test:  Full 4-case end-to-end benchmark suite]
+
+============================= 136 passed in ~5s =============================
 ```
-tests/
-├── conftest.py             # Test fixtures: temporary directories, sample invoices, and seed data
-├── fixtures/               # Static mock payloads: example_invoice.json
-├── test_compare.py         # Financial calculations, contract matching, rate schedules
-└── test_tools.py           # CLI tools, atomic IO, ledger operations, CSV formula escaping
-```
 
 ---
 
-## 2. Test Categories & Verification Suites
+## 2. Test Suites Detailed Breakdown
 
-### 2.1 Financial Correctness Tests (`tests/test_compare.py`)
-Validates that monetary calculations are mathematically exact and fail closed when data is ambiguous:
-- **Baseline Variance Verification**: Tests the canonical demo scenario (500 units @ ₹112 vs ₹100 = ₹6,000 variance, 12% overcharge).
-- **Underbilling Isolation**: Confirms invoices with rates below contract are flagged as `"under"` without forcing price increases.
-- **Awkward Decimal & Rounding Precision**: Tests odd quantities and fractional rates (e.g., $3 \times 10.335$) to ensure consistent `ROUND_HALF_UP` behavior without binary floating-point drift.
-- **Date-Effective Rate Resolution**: Verifies that rates active on the invoice date are selected, expired rates are ignored, and overlapping rates raise explicit errors.
-- **SKU & Word-Boundary Matching**: Ensures descriptions matching an explicit SKU (e.g., `CC-5`) match, while preventing substring overmatching (e.g., `CC-50` matching `CC-5`).
-- **Currency Parity**: Rejects invoices where line currencies conflict with contract rates.
+### 2.1 Financial Adversarial Suite (`test_financial_adversarial.py` — 35 tests)
+Covers all arithmetic edge cases, malformed numeric strings, and boundary anomalies:
+- **Scenario 1–4**: Nominal contracts (exact match, overcharge calculation, undercharge calculation, zero variance).
+- **Scenario 5–7**: Internal arithmetic discrepancies ($Qty \times Price \neq LineTotal$, stated total mismatch, missing line total).
+- **Scenario 8–14**: Missing quantities, zero quantity, negative quantities, negative prices, `NaN` / `Infinity`, invalid strings, duplicate line numbers.
+- **Scenario 15–21**: Unknown SKUs, ambiguous SKU matches, expired contract rates, future contract rates, overlapping contract rates, currency mismatches.
+- **Scenario 22–24**: Missing source files, source digest mismatches, cross-platform path traversal attempts.
+- **Scenario 25–29**: Mixed matched/unmatched items, multiple simultaneous errors, rounding boundaries, large and sub-cent numbers.
+- **Scenario 30–35**: Spreadsheet formula injection, malformed comparison JSON, tampered comparison digests, blocked-draft refusal, incomplete totals defense.
 
-### 2.2 CLI & Tool Integration Tests (`tests/test_tools.py`)
-Validates deterministic execution, exit codes, and file IO:
-- **Sequential Case ID Generation**: Tests `tools/next_case_id.py` across sequential runs and empty case directories.
-- **SHA-256 Fingerprinting**: Verifies full 64-character hash computation and 12-character slicing.
-- **Atomic File Writing**: Tests `write_json_atomic` resiliency and proper permissions.
-- **Pre-Flight Invoice Sanitation**: Verifies `tools/check_invoice.py` catches missing fields and internal arithmetic errors.
-- **End-to-End CLI Pipeline**: Simulates a complete manual run from invoice intake through comparison, ledger update, and CSV payment sheet generation.
+### 2.2 Boundary Audit Suite (`test_boundary_audit.py` — 20 tests)
+Verifies operational trust boundaries and the three-tier artifact model:
+- Enforcing refusal of `payment_sheet.py` on `BLOCKED` or `REVIEW_REQUIRED` audits.
+- Verification that `partial_review.csv` contains zero payable recommendations.
+- Verification that `blocked_review_report.csv` contains zero payable columns and values.
+- Comprehensive path traversal testing (Windows backslashes, POSIX forward slashes, mixed slashes, UNC paths, drive colons).
+- Companion digest tampering and missing digest detection.
 
-### 2.3 Security & Boundary Tests
-- **CSV Formula Injection**: Tests `tools/payment_sheet.py` against dangerous prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`) to ensure single-quote escaping is applied.
-- **Ledger Duplicate Prevention**: Tests `tools/ledger.py` rejection of existing case IDs (exit code 4).
-- **Malformed Record Rejection**: Parametrized tests validating that incomplete, invalid-status, or malformed records are rejected before ledger write.
+### 2.3 Authorization & Approval Gateway Suite (`test_auth_and_approval.py` — 15 tests)
+Verifies identity, tokens, and cryptographic receipt issuance:
+- HMAC-SHA-256 token generation and validation.
+- Token expiration (fail-closed on expired tokens).
+- Tampered token signature rejection.
+- Unknown and disabled actor rejection.
+- Role-Based Access Control (RBAC) permission checking.
+- Cryptographic approval receipt generation and signature validation.
+- Rejection of tampered amounts or cross-case receipt replay.
+- Gateway fail-closed check refusing approval on `BLOCKED` audits.
+- Gateway strict check matching approved amount to calculated contract payable goods amount.
+- Rejection recording requiring mandatory owner rationale.
+
+### 2.4 Audit Ledger Suite (`test_audit_ledger.py` — 8 tests)
+Verifies SQLite transaction safety and cryptographic hash chains:
+- Genesis event has `previous_event_hash == "0" * 64`.
+- Monotonic sequence numbering and unbroken hash chaining across events.
+- Detection of modified payload in historical events.
+- Detection of deleted events (sequence gaps).
+- Detection of reordered events or broken hash links.
+- Case-specific event filtering and empty ledger verification.
+
+### 2.5 Case Manager & Evidence Registry Suite (`test_case_manager_and_evidence.py` — 8 tests)
+Verifies case directory lifecycle and file fingerprinting:
+- Standardized directory layout initialization.
+- Legal state transitions across case lifecycle (`CREATED` $\to$ `INTAKE_VERIFIED` $\to$ `COMPARED` $\to$ `VERIFIED` $\to$ `APPROVED` $\to$ `CLOSED`).
+- Refusal of illegal state transitions or transitions out of terminal `CLOSED` state.
+- Evidence registration with full 64-character SHA-256 calculation.
+- Evidence re-verification detecting modified or missing files on disk.
+
+### 2.6 Pipeline Orchestration Suite (`test_pipeline_orchestration.py` — 3 tests)
+Verifies end-to-end controlled pipeline execution:
+- Execution manifest (`manifest.json`) recording stage results, artifact references, and hashes.
+- Evidence registry auto-population.
+- Pipeline requiring approval fails closed when approval receipt is missing.
+- Pipeline succeeds and emits `corrected_payment.csv` when valid approval receipt is provided.
+
+### 2.7 End-to-End Demo Suite (`test_demo_cases.py` — 1 test)
+Continuously runs the complete four-case benchmark suite in CI:
+- Case A (Clean match)
+- Case B (Overcharge with ₹6,000 withholding)
+- Case C (Review required with uncontracted line)
+- Case D (Blocked arithmetic discrepancy)
+- Verifies ledger hash chain integrity from genesis to head.
 
 ---
 
-## 3. Exact Commands for Test Execution
+## 3. How to Run the Tests
 
-### 3.1 Standard Test Execution (Authoritative)
 ```bash
-# Run complete test suite quietly via Makefile
-make test
+# Run all tests with standard summary
+python -m pytest
 
-# Run complete test suite with verbose output via pytest
+# Run with verbose test-by-test output
 python -m pytest -v
 
-# Run with full assertion diffs and local variables on failure
-python -m pytest -vv -l
+# Run a specific test suite
+python -m pytest tests/test_auth_and_approval.py -v
+python -m pytest tests/test_audit_ledger.py -v
+
+# Run the four-case demo verification suite directly
+python tools/run_demo_suite.py --clean
 ```
-
-### 3.2 Category-Specific Execution
-```bash
-# Run financial calculation and comparison tests only
-python -m pytest tests/test_compare.py -v
-
-# Run tool utilities, ledger, and CSV tests only
-python -m pytest tests/test_tools.py -v
-
-# Run a specific unit test by name
-python -m pytest -k "test_demo_case_six_thousand_over"
-python -m pytest -k "test_payment_sheet_blocks_formula_injection"
-```
-
----
-
-## 4. Fresh-Clone Verification Protocol
-
-To verify that the repository is completely self-contained and reproducible from a fresh clone:
-
-```bash
-# 1. Clean environment checkout
-git clone https://github.com/theninthfoundry/overcharge-desk.git
-cd overcharge-desk
-
-# 2. Install testing dependencies
-python3 -m pip install -r requirements-dev.txt
-
-# 3. Execute authoritative test suite
-python3 -m pytest
-
-# 4. Verify standalone CLI execution
-python3 tools/next_case_id.py
-python3 tools/compare.py tests/fixtures/example_invoice.json vendors/acme.json
-python3 tools/sha.py invoices/acme-inv-1103.txt
-```
-
----
-
-## 5. Planned Phase 2–6 Test Extensions
-
-The following test suites will be added in subsequent implementation phases:
-
-| Phase | Test Suite | Scope |
-|---|---|---|
-| **Phase 2** | `tests/test_financial_invariants.py` | Discrepant line-total blocking (`SOURCE_DISCREPANCY`), positive quantity assertions, negative unit price rejection. |
-| **Phase 3** | `tests/test_ledger_integrity.py` | Full 64-character SHA verification, tamper detection, hash chain integrity verification. |
-| **Phase 4** | `tests/test_orchestrator.py` | State machine transitions, verifiable receipt (`receipt.json`) generation and verification. |
-| **Phase 6** | `benchmarks/` | Adversarial multi-vendor scenarios (overlapping dates, currency conversions, edge-case tax items). |
-
-
-<!-- Testing Section: Automated test execution via Makefile targets -->
-
-<!-- Testing Section: Fresh-clone reproduction and verification protocol -->

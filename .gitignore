@@ -21,6 +21,11 @@ dist/
 cases/OC-*
 *.tmp
 *.bak
+*.db
+*.db-wal
+*.db-shm
+*.key
+signing.key
 
 # System & Editor files
 .DS_Store

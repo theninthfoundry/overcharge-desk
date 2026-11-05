@@ -1,126 +1,141 @@
-# DEMO_SCRIPT — Overcharge Desk (2 minutes)
+# DEMO_SCRIPT — Overcharge Desk (Full System Walkthrough)
 
-All vendors, invoices, amounts and names are synthetic. Say so in the video
-and the README.
+> All vendors, invoices, amounts, and names are synthetic demo data.
 
-## What the demo must prove
+This demo script proves that Overcharge Desk delivers deterministic verification, cryptographic human-in-the-loop authorization, tamper-evident audit chains, and strict fail-closed boundary controls.
 
-1. The three agents work in one Switch room, not three separate terminals.
-2. The agent remembers an earlier case **because the workflow itself recorded it**.
-3. Only the owner's decision moves the case forward.
-4. Real files come out, and nothing is sent.
+---
 
-It does **not** prove that Switch is the only place the vendor file could live.
-The ledger is a file in the repo and would survive without Switch. What would
-not survive is the shared room: the hand-offs, the owner's identity and
-decision, the common timeline, and agents from different vendors sharing one
-context. Say this plainly. Judges respect it more than a stretched claim.
+## 🎯 What the Demonstration Proves
 
-## Seed data (synthetic)
+1. **Exact Decimal Arithmetic**: The system calculates ₹6,000 variance and 12% overcharge using `decimal.Decimal` and `ROUND_HALF_UP`, never floating-point math.
+2. **Three-Tier Output Control**:
+   - `corrected_payment.csv` is ONLY produced for 100% verified audits with signed approval receipts.
+   - `partial_review.csv` is produced for uncontracted lines (investigation only).
+   - `blocked_review_report.csv` is produced for arithmetic discrepancies with zero payable fields.
+3. **Cryptographic Approval Receipts**: Decisions are signed using HMAC-SHA-256 tokens binding the full 64-char hashes of the case, invoice, comparison, and evidence.
+4. **Tamper-Evident SQLite Ledger**: Events form an unbroken SHA-256 hash chain anchored by a genesis block (`0 * 64`).
 
-| Item | Value |
-|---|---|
-| Vendor | Acme Supplies Pvt Ltd |
-| Contract | ACME-2026-01, Schedule A item 1: Corrugated carton 5-ply (CC-5), ₹100/unit, from 2026-01-01 |
-| Contract item 2 | Pallet wrap roll, ₹250/unit |
-| Case 1 invoice | INV-0914, dated 2026-09-14: 200 cartons at ₹112 = ₹22,400 (contract ₹20,000, difference ₹2,400) |
-| Case 2 invoice | INV-1103, dated 2026-11-03: line 1: 500 cartons at ₹112 = ₹56,000 (contract ₹50,000, difference **₹6,000**, 12%); line 2: 40 wrap rolls at ₹250 = ₹10,000 (matches) |
-| Case 2 totals | Invoiced ₹66,000, per contract ₹60,000, withheld ₹6,000 |
+---
 
-Line 2 is deliberate. It shows the Auditor says "matches" when it matches.
-If you want the exact ₹50,000 vs ₹56,000 invoice only, delete line 2; the
-withheld amount stays ₹6,000.
+## 📋 The 4 Canonical Demo Cases
 
-`vendors/acme.json` starts with the contract and an **empty** `cases` list.
-Do not pre-write any case into it. `make reset-demo` restores this state
-(and deletes `cases/OC-*`), and `make test` must pass before every recording.
+| Case | Directory | Invoice | Invoiced | Payable | Withheld | State | Result |
+|---|---|---|---|---|---|---|---|
+| **Case A** | `cases/demo-clean` | INV-1001 | ₹30,000.00 | ₹30,000.00 | ₹0.00 | `VERIFIED` | Clean payment sheet + approval receipt |
+| **Case B** | `cases/demo-overcharge` | INV-1103 | ₹66,000.00 | ₹60,000.00 | ₹6,000.00 | `VERIFIED` | Corrected payment sheet (₹6k withheld) |
+| **Case C** | `cases/demo-review` | INV-1201 | ₹54,500.00 | N/A | N/A | `REVIEW_REQUIRED` | Partial review artifact (investigation only) |
+| **Case D** | `cases/demo-blocked` | INV-1301 | ₹68,000.00 | N/A | N/A | `BLOCKED` | Discrepancy report; gateway refuses approval |
 
-## Setup done before filming (disclose it)
+---
 
-Do this at least a few hours before recording, on a different clock time from the demo.
+## ⚡ Automated 1-Command Demonstration
 
-1. Run **Case 1 for real** through the room: Reader, Auditor, then the owner
-   types `APPROVE <case_id> <hash>`, then Writer.
-2. The owner then types, in the room:
-   `OUTCOME <case_id> Vendor acknowledged by phone, credit note CN-114 promised for ₹2,400`
-   The unique token `CN-114` is the memory proof: the agent can only
-   know it by reading the ledger or room history.
-3. Stop all three agent sessions. Start fresh ones (new sessions, empty
-   context). Screenshot or screen-record each session's start time.
-4. Confirm the ledger now has one case, written by the Writer, with a
-   timestamp from the earlier session.
+Run the automated demonstration suite that verifies all 4 benchmark cases and validates the SQLite ledger hash chain:
 
-On camera say: "Case 1 was processed earlier today with the same workflow.
-This is its real record."
+```bash
+python tools/run_demo_suite.py --clean
+```
 
-## The script
+Expected output:
+```json
+{
+  "ok": true,
+  "all_cases_passed": true,
+  "cases": {
+    "case_a_clean": { "status": "PASSED", "verification_status": "VERIFIED", "payable_total": "30000.00", "withheld_total": "0.00" },
+    "case_b_overcharge": { "status": "PASSED", "verification_status": "VERIFIED", "invoiced_total": "66000.00", "payable_total": "60000.00", "withheld_total": "6000.00" },
+    "case_c_review_required": { "status": "PASSED", "verification_status": "REVIEW_REQUIRED", "unresolved_lines": 1 },
+    "case_d_blocked": { "status": "PASSED", "verification_status": "BLOCKED", "approval_refused_fail_closed": true }
+  },
+  "ledger_summary": {
+    "total_events": 18,
+    "chain_valid": true
+  }
+}
+```
 
-| Time | Screen | Voice-over |
-|---|---|---|
-| 0:00–0:12 | Title card, then the room | "Small businesses pay vendor invoices that nobody checks against the contract, and nobody remembers what the vendor did last time." |
-| 0:12–0:30 | Room member list: Reader (Claude Code), Auditor (Codex), Writer, owner. Scroll up to Case 1 with its timestamp and the `CN-114` outcome | "Three agents, two different vendors' tools, in one Mattermost room through Switch. Case 1 is from earlier today, and the agents have since been restarted." |
-| 0:30–0:45 | Owner drops `acme-inv-1103.txt` into the room. Reader posts its handoff | "The Reader extracts the invoice and hands it on in the room. No copy-paste." |
-| 0:45–1:10 | Auditor message: line 1 invoiced 112 vs contract 100, ₹6,000, 12%; line 2 matches. Then the history block quoting `CN-114` and "second occurrence" | "Numbers come from a Python script, not from the model. And it found Case 1. Look at what it quotes: a credit-note number only the ledger contains." |
-| 1:10–1:30 | Owner types `APPROVE <case_id> <hash>`. Writer replies with the identity-check wording | "Only the owner's command counts. The Writer tells you exactly how it checked, and it is honest about whether Switch or the instructions enforce it." |
-| 1:30–1:50 | Open `dispute_email.md` (header: DRAFT NOT SENT) and `corrected_payment.csv` (₹60,000 payable, ₹6,000 withheld) | "Two real files. The email cites only evidence from the audit, and nothing is sent. The owner decides." |
-| 1:50–2:00 | Split screen: three bare terminals vs the room | "Without Switch, these are three terminals. The hand-offs, the owner's decision and the shared history are gone." |
+---
 
-Optional beat (only if tested and it works): ask the Auditor to approve its
-own finding on camera and show it refuse.
+## 🎬 Step-by-Step Manual Demo Script (Live Walkthrough)
 
-## Memory proof checklist (do before filming)
+### Step 1: Pre-flight Verification (30 seconds)
+Show the passing automated test suite to establish radical engineering transparency:
+```bash
+python -m pytest -v
+```
+*Voice-over*: "Overcharge Desk operates under strict engineering invariants defined in AGENTS.md. 136 automated adversarial tests verify exact decimal arithmetic, path traversal guards, formula injection mitigation, and fail-closed security boundaries."
 
-- [ ] The Auditor's session start time is later than the Case 1 record timestamp.
-- [ ] The Auditor's message shows it reading `vendors/acme.json` (tool output visible).
-- [ ] It quotes `CN-114` exactly, with no invented details.
-- [ ] Ask it "what did the vendor say about Case 1 if nothing is recorded?" on a
-      scratch case and confirm it says "outcome not recorded".
+---
 
-## Day-1 checks (first hour on Nov 4)
+### Step 2: The Acme Overcharge Scenario (1 minute)
 
-Switch-specific behaviour is unverified until you test it. Fill the Status
-column honestly, then set `ENFORCEMENT_LEVEL` in each agent file to match.
+1. **Inspect Invoice and Contract**:
+   - Invoice: `invoices/acme-inv-1103.txt` (500 CC-5 cartons @ ₹112.00, 40 pallet wraps @ ₹250.00)
+   - Contract: `contracts/acme-contract.md` (Schedule A: CC-5 rate is ₹100.00, PW-1 rate is ₹250.00)
 
-| Claim | How to test | Status |
-|---|---|---|
-| A file dropped in the room reaches the agent | Drop a .txt invoice; the Reader reads it | UNVERIFIED |
-| Sender identity is visible to agents | Ask each agent who sent the last message | UNVERIFIED |
-| Only the owner can instruct the Writer | Have a second account send `APPROVE`; see whether Switch blocks it | UNVERIFIED |
-| Reader cannot write `vendors/` | Run a case, then `git diff vendors/` | UNVERIFIED |
-| Auditor cannot write `vendors/` | Same | UNVERIFIED |
-| Writer cannot send email | No email tool or credentials configured; confirm none exist | UNVERIFIED |
-| Restarted agents keep nothing in context | Ask a fresh session about Acme before it reads any file | UNVERIFIED |
+2. **Run Reconciliation Pipeline (Analysis Mode)**:
+   ```bash
+   python tools/pipeline.py cases/demo-overcharge/invoice.json vendors/acme.json cases/demo-overcharge/
+   ```
+   *Voice-over*: "The pipeline verifies the source document hash, executes deterministic comparison, validates math down to the byte, records events in the SQLite ledger, and registers evidence. It identifies a ₹12/unit overcharge on 500 cartons: ₹6,000 withheld."
 
-## What the README may claim
+3. **Issue Owner Authentication Token**:
+   ```bash
+   python tools/auth.py issue-token owner
+   ```
+   *Voice-over*: "Authorization does not rely on LLM prompts or chat strings. The owner receives a time-bound HMAC-SHA-256 authenticated token."
 
-- "Instruction-level" for anything not blocked by Switch or the filesystem.
-- "Enforced by Switch" only for rows you tested and marked VERIFIED, with how.
-- Never "secure", "tamper-proof" or "audit-grade". It is a hackathon prototype
-  on synthetic data.
+4. **Approve via Authorization Gateway**:
+   ```bash
+   python tools/approval_gateway.py approve cases/demo-overcharge --token "<owner_token>" --amount 60000.00
+   ```
+   *Voice-over*: "The gateway re-verifies evidence on disk, verifies that the comparison is clean, validates the approved amount matches the exact payable subtotal, and issues a cryptographic receipt binding all 64-character digests."
 
-## Recording tips
+5. **Generate Final Payment Sheet**:
+   ```bash
+   python tools/pipeline.py cases/demo-overcharge/invoice.json vendors/acme.json cases/demo-overcharge/ --require-approval
+   ```
+   *Voice-over*: "With authorized approval verified, the pipeline outputs `corrected_payment.csv`. Over-billed lines pay contract amounts and withhold variances; matched lines pay as invoiced."
 
-- Record the room at a readable size. Zoom in on the history block and the
-  identity-check line.
-- Do one take where it works; do not fake a retake of a failed run. If an
-  agent errs, show the failure handling; that is part of the point.
-- Keep the README's "how to run" to three commands, so it can be cloned and
-  reproduced.
+---
 
-<!-- Step-by-step cold restart verification procedure -->
+### Step 3: Adversarial Proof: Blocking Internal Discrepancies (30 seconds)
 
-<!-- Pre-flight verification checklist for Switch room -->
+Show how the system handles an invoice where written math contradicts computed math:
 
-<!-- Explicit synthetic data disclosure statement -->
+1. **Run Blocked Discrepancy Case**:
+   ```bash
+   python tools/pipeline.py cases/demo-blocked/invoice.json vendors/acme.json cases/demo-blocked/
+   ```
+   *Voice-over*: "Line 1 claims $500 \times 112 = 58,000$, which is mathematically false ($56,000$). The system refuses to guess, flags `SOURCE_DISCREPANCY`, and enters `BLOCKED` status."
 
-<!-- Video timeline and script cues -->
+2. **Attempt Unauthorized Approval**:
+   ```bash
+   python tools/approval_gateway.py approve cases/demo-blocked --token "<owner_token>"
+   ```
+   *Voice-over*: "The Authorization Gateway immediately refuses with exit code 4: `Cannot approve BLOCKED audit`. No payment sheet is ever produced. Only discrepancy facts are exported to `blocked_review_report.csv` with zero payable fields."
 
-<!-- Pre-filming Case 1 execution runbook -->
+---
 
-<!-- Context wipe verification checklist -->
+### Step 4: Ledger Audit & Chain Verification (30 seconds)
 
-<!-- Required terminal output captures -->
+Verify that all actions were committed to the SQLite ledger without tampering:
 
-<!-- Owner approval syntax and parameter guide -->
+```bash
+python tools/verify_ledger.py --strict
+```
 
-<!-- Split screen demonstration outline -->
+*Voice-over*: "Every case creation, comparison, approval, and payment recommendation is committed to an append-only SQLite ledger using a cryptographic SHA-256 hash chain starting from genesis. The independent verifier traverses the chain from start to finish and confirms zero broken links and zero altered payloads."
+
+---
+
+## 📊 Summary of Artifact Files Produced
+
+- `cases/demo-overcharge/comparison/compare.json`: Deterministic comparison result (schema 2.0.0).
+- `cases/demo-overcharge/comparison/compare.json.sha256`: Companion cryptographic digest.
+- `cases/demo-overcharge/evidence_registry.json`: Registry of all fingerprinted intake documents.
+- `cases/demo-overcharge/approvals/approval_receipt.json`: Signed human authorization receipt.
+- `cases/demo-overcharge/corrected_payment.csv`: Final payment recommendation for owner review.
+- `cases/demo-overcharge/manifest.json`: Full execution manifest for crash recovery and audit.
+- `ledger.db`: SQLite database storing the unbroken tamper-evident audit chain.
