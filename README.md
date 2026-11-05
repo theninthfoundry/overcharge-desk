@@ -3,10 +3,10 @@
 > **Deterministic, Evidence-First Vendor Reconciliation & Cryptographic Payment Control**  
 > Verifies commercial invoices against contracts with exact decimal arithmetic, binds human approvals to immutable cryptographic evidence receipts, logs append-only event chains in a tamper-evident SQLite ledger, and strictly prevents unauthorized or unverified payment recommendations.
 
-[![Tests](https://img.shields.io/badge/Tests-154%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-186%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
 [![Python](https://img.shields.io/badge/Python-3.9%20|%203.10%20|%203.11%20|%203.12%20|%203.13-blue?style=for-the-badge&logo=python)](https://python.org)
 [![Arithmetic](https://img.shields.io/badge/Arithmetic-Exact%20Decimal%20(No%20Floats)-brightgreen?style=for-the-badge)](AGENTS.md)
-[![Security](https://img.shields.io/badge/Security-Fail--Closed%20RBAC-red?style=for-the-badge)](docs/SECURITY_MODEL.md)
+[![Security](https://img.shields.io/badge/Security-Fail--Closed%20Argon2id%20&%20RBAC-red?style=for-the-badge)](docs/SECURITY_MODEL.md)
 [![Ledger](https://img.shields.io/badge/Ledger-Tamper--Evident%20SHA--256%20Chain-blueviolet?style=for-the-badge)](tools/audit_ledger.py)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
@@ -225,22 +225,30 @@ python tools/export_audit_package.py verify case_audit/OC-20261106-01
 
 ## 📊 Test Suite & Verification Matrix
 
-The test suite covers **154 automated test cases** across 11 test modules:
+The test suite covers **186 automated test cases** across 17 test modules:
 
 ```text
-tests/test_api.py                       10 passed (FastAPI endpoints, auth, cases, artifacts, audit, vendors)
-tests/test_audit_ledger.py              11 passed (Genesis, hash links, triggers, tampering, checkpoints)
-tests/test_auth_and_approval.py         15 passed (HMAC tokens, TTL, role permissions, signed receipts)
-tests/test_boundary_audit.py            20 passed (4-tier routing, path traversal, injection, digests)
-tests/test_case_manager_and_evidence.py  8 passed (Directory layout, state transitions, SHA-256 tracking)
-tests/test_compare.py                   21 passed (Decimal precision, rounding, SKU boundaries, dates)
-tests/test_financial_adversarial.py     35 passed (Invalid numbers, negative quantities, formula injection)
-tests/test_pipeline_orchestration.py     3 passed (Execution manifests, approval enforcement, recovery)
-tests/test_rbac_and_separation_of_duties.py 5 passed (Separation of duties, allowlists, token lifecycle)
-tests/test_tools.py                     25 passed (CLI utilities, error exits, seed parity)
-tests/test_demo_cases.py                 1 passed (Full 6-case end-to-end benchmark & export suite)
------------------------------------------------------------------------------------------------------
-TOTAL: 154 passed in ~8 seconds
+tests/test_api.py                                      10 passed (FastAPI endpoints, auth, cases, artifacts, audit, vendors)
+tests/test_audit_ledger.py                             11 passed (Genesis, hash links, triggers, tampering, checkpoints)
+tests/test_auth_and_approval.py                        15 passed (HMAC tokens, TTL, role permissions, signed receipts)
+tests/test_boundary_audit.py                           20 passed (4-tier routing, path traversal, injection, digests)
+tests/test_case_manager_and_evidence.py                 8 passed (Directory layout, state transitions, SHA-256 tracking)
+tests/test_compare.py                                  21 passed (Decimal precision, rounding, SKU boundaries, dates)
+tests/test_financial_adversarial.py                    35 passed (Invalid numbers, negative quantities, formula injection)
+tests/test_pipeline_orchestration.py                    3 passed (Execution manifests, approval enforcement, recovery)
+tests/test_rbac_and_separation_of_duties.py            5 passed (Separation of duties, allowlists, token lifecycle)
+tests/test_tools.py                                    25 passed (CLI utilities, error exits, seed parity)
+tests/test_demo_cases.py                                1 passed (Full 6-case end-to-end benchmark & export suite)
+tests/concurrency/test_concurrency_and_transitions.py   3 passed (Optimistic concurrency, version checks, lifecycle graph)
+tests/payments/test_payment_instructions.py             4 passed (Payment instructions, single export, unverified bank block)
+tests/security/test_api_security.py                    5 passed (Security headers, CSP, brute-force lockout, generic auth)
+tests/security/test_bootstrap_admin.py                  3 passed (Interactive CLI bootstrap, demo seed isolation)
+tests/security/test_key_manager.py                      4 passed (Key lifecycle, retirement, revocation, rotation)
+tests/security/test_operational_health.py               3 passed (LIVE, READY, and DEGRADED operational health probes)
+tests/security/test_password_security.py                5 passed (Argon2id hashing, bounds checking, constant-time compare)
+tests/security/test_storage_security.py                 5 passed (Path traversal guards, symlink containment, 10MB limits)
+-------------------------------------------------------------------------------------------------------------------------
+TOTAL: 186 passed, 1 skipped in ~20 seconds
 ```
 
 ---

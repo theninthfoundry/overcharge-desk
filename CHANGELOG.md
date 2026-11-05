@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.2.0] - 2026-11-05
+
+### Added
+- **Argon2id Password Storage & Bound Checking** (`domain/identity/passwords.py`):
+  - Memory-hard Argon2id ($64\text{ MB}$, 3 iterations, 4 parallelism) with PBKDF2-HMAC-SHA256 (600,000 rounds) fallback and automatic transparent rehash.
+  - String length bounds enforcement (8–1024 characters) to neutralize password hashing DoS.
+- **Persistent SQLite Identity Store & Opaque Bearer Tokens** (`domain/identity/repository.py`):
+  - 32-byte cryptographic random session tokens stored exclusively as SHA-256 hashes (`token_hash`) with WAL mode and foreign key integrity.
+  - Dedicated `/api/v1/auth/logout` endpoint for instant session token revocation.
+- **Fail-Closed Cryptographic Key Management & Rotation** (`domain/identity/key_manager.py`):
+  - Explicit key status lifecycle (`ACTIVE`, `RETIRED`, `REVOKED`), tracking historical keys for backwards verification.
+  - Refusal to start in production if key manifest or active key files are missing or have insecure file permissions.
+- **Strict Case Storage Isolation & Symlink Containment** (`domain/cases/storage.py`):
+  - Enforced `^[a-zA-Z0-9_\-]{3,64}$` case identifier regex, prohibiting path traversal tokens (`..`, `/`, `\`, null bytes).
+  - Explicit canonical containment assertions, symlink escape checks, 10MB artifact size limits, and allowed artifact registry.
+- **Transactional Case State Machine with Optimistic Concurrency** (`domain/cases/transitions.py`):
+  - Closed transition graph with optimistic version checks preventing race conditions and inconsistent lifecycle progression.
+- **Controlled Payment Release & Destination Verification** (`domain/payments/`, `domain/vendors/`):
+  - Payment instructions isolated behind verified approval receipts, single instruction per approval, and duplicate export prevention.
+  - Remittance routing verification in `VendorRegistry` defeating invoice text BEC and routing spoofing.
+- **API Perimeter Defense & Health Observability** (`services/api/middleware.py`, `services/api/main.py`):
+  - Security headers (CSP, nosniff, DENY frame options, strict referrer, HSTS, `X-Request-ID`).
+  - Sliding window brute-force lockout (5 attempts / 5 minutes) with generic error responses.
+  - Operational health endpoint distinguishing `READY` and `DEGRADED` states across DB, storage, and key manager.
+- **Automated Test Suite Expansion**:
+  - Expanded test suite from 154 to 186 automated test scenarios across security, concurrency, payments, and recovery.
+
+---
+
 ## [3.0.0] - 2026-11-05
 
 ### Added
@@ -66,3 +95,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial project prototype and canonical repository structure.
 - Basic rate comparison CLI and Acme demo invoice fixtures.
 - Baseline test suite.
+
