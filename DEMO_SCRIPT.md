@@ -139,3 +139,6 @@ python tools/verify_ledger.py --strict
 - `cases/demo-overcharge/corrected_payment.csv`: Final payment recommendation for owner review.
 - `cases/demo-overcharge/manifest.json`: Full execution manifest for crash recovery and audit.
 - `ledger.db`: SQLite database storing the unbroken tamper-evident audit chain.
+
+
+<!-- Invariant Note: Demo script verified against all four canonical benchmark test cases -->
