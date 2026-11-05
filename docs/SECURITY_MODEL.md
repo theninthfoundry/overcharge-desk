@@ -63,3 +63,6 @@
 1. **Shared Secret Model**: HMAC-SHA-256 authenticates that the token or receipt was created with knowledge of `config/signing.key`. It does not provide asymmetric non-repudiation (an administrator with access to the key could theoretically sign a receipt).
 2. **Local Storage Immutability**: The SQLite ledger is append-only by application convention and tamper-evident via hash chaining. It detects tampering; however, an attacker with full root filesystem access could re-write the SQLite file and recompute hashes from the point of modification forward. For mission-critical deployments, ledger snapshots should be replicated to write-once-read-many (WORM) cloud storage or signed with external timestamp authorities.
 3. **Synthetic Demo Data**: Current vendor contracts and invoices are synthetic fixtures designed for adversarial evaluation and demonstration.
+
+
+<!-- Invariant Note: Security boundaries strictly enforce fail-closed authorization -->
