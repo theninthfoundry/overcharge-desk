@@ -70,6 +70,7 @@ EVENT_TYPES = (
 
 
 def get_connection(db_path: Path | str = DEFAULT_LEDGER_DB) -> sqlite3.Connection:
+    # Invariant Rule 4.1: SQLite WAL mode with foreign key enforcement for ACID transactional safety
     """Open SQLite connection with WAL mode and strict foreign keys."""
     p = Path(db_path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -407,3 +408,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     run_cli(main)
+
