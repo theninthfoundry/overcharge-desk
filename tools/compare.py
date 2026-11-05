@@ -87,6 +87,7 @@ def compare(invoice: dict, vendor: dict, base_dir: Path | str | None = None) -> 
     unresolved_evidence: list[str] = []
 
     # Mandatory Source Integrity Verification (Fail-Closed Invariant)
+    # Invariant Rule 2.2: Compute and verify full 64-character source SHA-256 fingerprint
     src = invoice.get("source_file")
     src_sha = invoice.get("source_sha256")
     src_verified = False
