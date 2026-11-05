@@ -96,7 +96,7 @@ class AuthorizationService:
         if not self.has_permission(approver, PERM_CASE_APPROVE):
             return False, f"Role '{approver.role}' is not authorized to grant financial approvals"
 
-        # Rule 2: Separation of duties
+        # Rule 2: Separation of duties (Four-Eyes Principle: creator != approver)
         if self.enforce_strict_separation_of_duties:
             if case_creator_username and approver.username.lower() == case_creator_username.lower():
                 return (
