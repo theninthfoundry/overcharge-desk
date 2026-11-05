@@ -23,6 +23,7 @@ from common import (CENT, ToolError, emit, exact_str, is_safe_relative_path,
                     STATUS_SOURCE_DISCREPANCY, STATUS_UNMATCHED, STATUS_REQUIRES_HUMAN_REVIEW)
 
 SCHEMA_VERSION = "2.0.0"
+# Schema 2.0.0 enforces three-tier system verification state: VERIFIED, REVIEW_REQUIRED, BLOCKED
 ZERO = to_decimal(0)
 SHA_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
