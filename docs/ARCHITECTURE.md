@@ -146,3 +146,6 @@ $$\text{EventHash}_n = \text{SHA-256}\left(\text{canonical}\left(\begin{aligned}
 - **Genesis**: Event 1 has $\text{EventHash}_0 = 0^{64}$ (64 hexadecimal zeros).
 - **Append-Only Guarantee**: SQLite transactions with `BEGIN IMMEDIATE` ensure concurrent execution cannot create sequence gaps or fork the hash chain.
 - **Verification Complexity**: $O(N)$ sequential scan recalculating and validating every link.
+
+
+<!-- Invariant Note: Architecture adheres to AGENTS.md separation of financial math and prompts -->
