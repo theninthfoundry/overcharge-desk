@@ -41,6 +41,13 @@ This demo script proves that Overcharge Desk delivers deterministic verification
 Run the automated demonstration suite that verifies all 6 benchmark cases, exports the audit package, and validates the SQLite ledger hash chain:
 
 ```bash
+# 1. Quickstart Runner (Runs benchmarks, verifies ledger, and launches dashboard)
+python tools/quickstart.py --serve
+
+# 2. Standalone Switch Multi-Agent Simulator (Live terminal collaboration)
+python tools/simulate_switch.py
+
+# 3. Direct benchmark suite
 python tools/run_demo_suite.py --clean
 ```
 
@@ -53,7 +60,7 @@ Show the passing automated test suite to establish radical engineering transpare
 ```bash
 python -m pytest -v
 ```
-*Voice-over*: "Overcharge Desk operates under strict engineering invariants defined in AGENTS.md. 227 automated adversarial tests verify exact decimal arithmetic, path traversal guards, formula injection mitigation, and fail-closed security boundaries across Windows, Ubuntu, and Python 3.9 through 3.13."
+*Voice-over*: "Overcharge Desk operates under strict engineering invariants defined in AGENTS.md. 230 automated adversarial tests verify exact decimal arithmetic, path traversal guards, formula injection mitigation, and fail-closed security boundaries across Windows, Ubuntu, and Python 3.9 through 3.13."
 
 ---
 

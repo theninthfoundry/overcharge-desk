@@ -18,7 +18,7 @@ operating Overcharge Desk inside a Switch / Mattermost multi-agent environment.
 ## 1. Environment & Pre-requisites
 
 - [x] Docker installed and running for Mattermost and Switch runtime.
-- [x] Python 3.9–3.13 installed. Full test suite passing (**227 automated tests**).
+- [x] Python 3.9–3.13 installed. Full test suite passing (**230 automated tests**).
 - [x] Switch Console initialized with Mattermost team channel `#overcharge-desk`.
 - [x] AI Agent CLI engines provisioned (Claude Code and OpenAI Codex).
 - [x] Repository cloned into shared agent working directory.
@@ -108,3 +108,19 @@ Run these checks to confirm proper configuration:
 # Execute complete unit, integration, and security test suite
 python -m pytest -v
 ```
+
+---
+
+## 7. Standalone Switch Multi-Agent Simulator
+
+For local rehearsal, judging demonstration, or running the multi-agent room without Docker:
+
+```bash
+# Run realistic terminal simulation of the #overcharge-desk Switch room
+python tools/simulate_switch.py
+
+# Or run instantly without typing delays
+python tools/simulate_switch.py --fast
+```
+
+This tool steps through the 4-turn multi-agent collaboration in real time with styled terminal badges, executing actual deterministic tools (`tools/desk.py intake`, `audit`, `history`, `approve.py`, `finalize`) and verifying SQLite ledger chain integrity.

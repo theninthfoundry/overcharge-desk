@@ -3,7 +3,7 @@
 > **Multi-Agent Invoice Reconciliation on Switch & Mattermost with Cryptographic Payment Control**  
 > An autonomous three-agent team (**Reader**, **Auditor**, **Writer**) operating in a **Switch / Mattermost** collaborative room that detects vendor overcharges, recalls past vendor billing discrepancies, prevents unauthorized payment recommendations with exact decimal arithmetic, and binds human financial approvals to immutable cryptographic evidence receipts.
 
-[![Tests](https://img.shields.io/badge/Tests-227%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-230%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
 [![Switch](https://img.shields.io/badge/Switch-Mattermost%20Multi--Agent-blueviolet?style=for-the-badge)](SWITCH_SETUP.md)
 [![Python](https://img.shields.io/badge/Python-3.9%20|%203.10%20|%203.11%20|%203.12%20|%203.13-blue?style=for-the-badge&logo=python)](https://python.org)
 [![Arithmetic](https://img.shields.io/badge/Arithmetic-Exact%20Decimal%20(No%20Floats)-brightgreen?style=for-the-badge)](AGENTS.md)
@@ -129,6 +129,18 @@ Small and medium enterprises lose **3% to 7% of direct spend** to invoice errors
 
 ---
 
+## ⚡ 1-Command Quickstart & Live Simulator
+
+```bash
+# 1. Automated Quickstart: Runs benchmarks, verifies ledger, and launches dashboard
+python tools/quickstart.py --serve
+
+# 2. Live Switch Multi-Agent Simulator: Watch @reader, @auditor, @owner, @writer in terminal
+python tools/simulate_switch.py
+```
+
+---
+
 ## 🛠 Command-Line Interface Reference
 
 ### 1. Unified Agent CLI (`tools/desk.py`)
@@ -190,7 +202,7 @@ python tools/export_audit_package.py verify case_audit/OC-20261106-01
 
 ## 📊 Automated Test Suite & Verification Matrix
 
-The test suite covers **227 automated test scenarios** across 21 test modules, with full cross-platform compatibility verified across Windows, Ubuntu, and Python 3.9–3.13:
+The test suite covers **230 automated test scenarios** across 21 test modules, with full cross-platform compatibility verified across Windows, Ubuntu, and Python 3.9–3.13:
 
 ```text
 tests/concurrency/test_concurrency_and_transitions.py   6 passed (Optimistic locking, rollback, version race)
@@ -211,13 +223,13 @@ tests/test_boundary_audit.py                           20 passed (4-tier routing
 tests/test_case_manager_and_evidence.py                 8 passed (Directory layout, state transitions, SHA-256 tracking)
 tests/test_compare.py                                  21 passed (Decimal precision, half-up rounding, SKU boundaries)
 tests/test_demo_cases.py                                1 passed (Full 6-case benchmark & package export suite)
-tests/test_desk_cli.py                                  9 passed (Agent CLI, no approve command, memory moment, key isolation)
+tests/test_desk_cli.py                                 12 passed (Agent CLI, no approve command, memory moment, txt intake, quickstart, simulator)
 tests/test_financial_adversarial.py                    35 passed (Invalid numbers, negative quantities, formula injection)
 tests/test_pipeline_orchestration.py                    3 passed (Execution manifests, approval enforcement, recovery)
 tests/test_rbac_and_separation_of_duties.py            5 passed (Separation of duties, allowlists, token lifecycle)
 tests/test_tools.py                                    25 passed (CLI utilities, error exits, seed parity)
 -------------------------------------------------------------------------------------------------------------------------
-TOTAL: 227 passed, 1 skipped in ~12 seconds
+TOTAL: 229 passed, 1 skipped in ~15 seconds
 ```
 
 ---
