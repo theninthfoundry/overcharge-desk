@@ -80,6 +80,7 @@ def test_pipeline_generates_execution_manifest_and_evidence(tmp_path):
 
 
 def test_pipeline_refuses_payment_without_approval_when_required(tmp_path):
+    # Orchestration Test: Verifies refusal of payment sheet when required approval is missing
     inv_path = Path("tests/fixtures/example_invoice.json")
     vendor_path = Path("vendors/acme.json")
     out_dir = tmp_path / "pipeline_no_app"
