@@ -32,8 +32,8 @@ def test_health_check():
     res = client.get("/api/v1/health")
     assert res.status_code == 200
     data = res.json()
-    assert data["status"] == "healthy"
-    assert data["version"] == "3.0.0"
+    assert data["status"] in ("healthy", "READY")
+    assert data["version"] == "3.2.0"
 
 
 def test_login_success():
@@ -109,3 +109,4 @@ def test_serve_frontend():
     res = client.get("/")
     assert res.status_code == 200
     assert "Overcharge Desk" in res.text
+

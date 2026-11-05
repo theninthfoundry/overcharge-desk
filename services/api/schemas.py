@@ -128,3 +128,26 @@ class LedgerVerifyResponse(BaseModel):
     total_events: int
     issues_count: int
     issues: List[str] = []
+
+
+class CreatePaymentInstructionRequest(BaseModel):
+    idempotency_key: Optional[str] = Field(None, description="Optional client idempotency key")
+
+
+class PaymentInstructionResponse(BaseModel):
+    instruction_id: str
+    case_id: str
+    approval_receipt_id: str
+    approved_amount: str
+    currency: str
+    vendor_id: str
+    destination_reference: str
+    destination_verified: bool
+    status: str
+    created_at: str
+    expires_at: str
+    idempotency_key: Optional[str] = None
+    exported_at: Optional[str] = None
+    exported_by: Optional[str] = None
+
+

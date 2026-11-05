@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from common import ToolError
 from domain.authorization.policies import (
@@ -23,6 +23,8 @@ from services.api.schemas import (
     CaseDetailResponse,
     CaseSummaryResponse,
     CreateCaseRequest,
+    CreatePaymentInstructionRequest,
+    PaymentInstructionResponse,
     ReconcileRequest,
     ReconcileResponse,
 )
@@ -186,3 +188,66 @@ def download_artifact(
 
     media_type = "text/csv" if artifact_name.endswith(".csv") else "application/json"
     return FileResponse(path=str(art_p), filename=artifact_name, media_type=media_type)
+
+
+@router.post("/{case_id}/payment-instruction", response_model=PaymentInstructionResponse)
+def create_payment_instruction(
+    case_id: str,
+    req: CreatePaymentInstructionRequest,
+    user: User = Depends(require_permission(PERM_PAYMENT_EXPORT)),
+    case_svc: CaseService = Depends(get_case_service),
+) -> PaymentInstructionResponse:
+    try:
+        inst = case_svc.create_payment_instruction(
+            case_id=case_id,
+            operator=user,
+            idempotency_key=req.idempotency_key,
+        )
+        return PaymentInstructionResponse(
+            instruction_id=inst.instruction_id,
+            case_id=inst.case_id,
+            approval_receipt_id=inst.approval_receipt_id,
+            approved_amount=inst.approved_amount,
+            currency=inst.currency,
+            vendor_id=inst.vendor_id,
+            destination_reference=inst.destination_reference,
+            destination_verified=inst.destination_verified,
+            status=inst.status,
+            created_at=inst.created_at,
+            expires_at=inst.expires_at,
+            idempotency_key=inst.idempotency_key,
+            exported_at=inst.exported_at,
+            exported_by=inst.exported_by,
+        )
+    except ToolError as exc:
+        code = status.HTTP_403_FORBIDDEN if exc.code == 4 else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(exc))
+
+
+@router.get("/{case_id}/payment-instruction/{instruction_id}/export")
+def export_payment_instruction(
+    case_id: str,
+    instruction_id: str,
+    format: str = Query("csv", pattern="^(csv|json)$"),
+    user: User = Depends(require_permission(PERM_PAYMENT_EXPORT)),
+    case_svc: CaseService = Depends(get_case_service),
+):
+    try:
+        media_type, content = case_svc.export_payment_instruction(
+            case_id=case_id,
+            instruction_id=instruction_id,
+            operator=user,
+            format_type=format,
+        )
+        ext = "json" if format == "json" else "csv"
+        filename = f"{instruction_id}.{ext}"
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except ToolError as exc:
+        code = status.HTTP_403_FORBIDDEN if exc.code == 4 else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(exc))
+
+
