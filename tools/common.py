@@ -96,6 +96,7 @@ def check_non_negative_decimal(value, what: str = "amount") -> Decimal:
 
 
 def q2(d: Decimal) -> Decimal:
+    # Invariant Rule 1.3: Explicit half-up rounding to two decimal places per line item
     """Quantize to two decimal places using explicit ROUND_HALF_UP."""
     return d.quantize(CENT, rounding=ROUND_HALF_UP)
 
