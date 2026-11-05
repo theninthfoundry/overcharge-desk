@@ -52,3 +52,18 @@ def test_needs_rehash():
         assert needs_rehash(h) is False
     # A legacy or pbkdf2 hash needs rehash to argon2
     assert needs_rehash("$pbkdf2-sha256$i=1000$00$00") is True
+
+
+def test_exact_bounds_lengths_accepted():
+    """Verify exact min (8) and max (1024) password lengths are accepted."""
+    min_pw = "12345678"
+    assert len(min_pw) == 8
+    h_min = hash_password(min_pw)
+    assert verify_password(min_pw, h_min) is True
+
+    max_pw = "b" * 1024
+    assert len(max_pw) == 1024
+    h_max = hash_password(max_pw)
+    assert verify_password(max_pw, h_max) is True
+
+
