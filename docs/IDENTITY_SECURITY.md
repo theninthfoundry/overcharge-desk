@@ -83,3 +83,19 @@ At server startup, `IdentityRepository.check_production_safety()` executes:
 - When `APP_ENV=production`:
   - If any active account has `is_demo = 1` or demo usernames (`admin`, `operator`, `reviewer`, `approver`, `auditor`, `pay_operator`) with default credentials, startup fails immediately (`ToolError`, exit code 4).
 
+---
+
+## 5. Terminal-Based Human Authorization Gate (`tools/approve.py`)
+
+To ensure that autonomous AI agents cannot forge financial approvals or mint authentication tokens through chat prompts:
+1. **Interactive TTY Enforcement**:
+   - `tools/approve.py` checks `sys.stdin.isatty() == True`.
+   - Automated subprocesses, background daemons, and piped commands are rejected immediately with exit code 4.
+2. **Interactive Argon2id Verification**:
+   - Prompts the human operator for their password using `getpass.getpass()`.
+   - Validates credentials directly against `IdentityRepository` with constant-time password comparison.
+3. **Role Validation**:
+   - Only authenticated actors holding `APPROVER` or `ADMINISTRATOR` roles can authorize case settlements.
+4. **Token Minting Lockdown**:
+   - `python tools/auth.py issue-token` is blocked by default and requires `--dev` for local testing. In normal operation, tokens are only issued internally by `tools/approve.py` after successful password verification.
+
