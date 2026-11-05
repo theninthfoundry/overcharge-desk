@@ -93,6 +93,7 @@ LEGAL_TRANSITIONS: Dict[str, Set[str]] = {
 }
 
 SUBDIRECTORIES = [
+    # Standardized directory structure isolating intake, comparison, approvals, and artifacts
     "source",
     "normalized",
     "comparison",
@@ -253,3 +254,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     run_cli(main)
+
