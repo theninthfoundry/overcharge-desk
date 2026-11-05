@@ -53,10 +53,10 @@ def hash_password(password: str) -> str:
     if _HAS_ARGON2 and _PH is not None:
         return _PH.hash(password)
 
-    # Secure fallback to PBKDF2-HMAC-SHA256 (600,000 iterations)
+    # Secure fallback: PBKDF2-HMAC-SHA256 with 600,000 rounds and 16-byte random salt
     import hashlib
-    salt = secrets.token_bytes(16)
-    iterations = 600000
+    salt = secrets.token_bytes(16)  # 128-bit cryptographic salt
+    iterations = 600000  # OWASP 2026 recommended iteration threshold
     derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
     salt_hex = salt.hex()
     hash_hex = derived.hex()
