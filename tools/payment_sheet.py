@@ -83,6 +83,7 @@ def build_rows(result: dict, validate: bool = True) -> tuple[list[list[str]], di
         direction = ln.get("direction")
 
         if direction == "over" or ln.get("verification_status") == "VERIFIED_OVERCHARGE":
+            # Settlement Policy: Overcharge withheld; contract payable amount recommended
             pay = q2(qty * to_decimal(ln["contract_unit_price"]))
             hold = to_decimal(ln["line_variance"])
             note = "Billed above contract rate: paying contract amount, difference withheld"
