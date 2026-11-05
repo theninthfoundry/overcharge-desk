@@ -101,13 +101,17 @@ All agents (Claude Code, OpenAI Codex, Antigravity, and any other automated or h
 
 <!-- Invariant Rule 3.1: Full 64-char SHA256 cryptographic digest binding -->
 
+<!-- Invariant Rule 3.3: Interactive TTY and Argon2id password-verified human authorization via tools/approve.py -->
+
 <!-- Invariant Rule 4.1: Tamper-evident hash chain verification policy -->
 
 <!-- Invariant Rule 5.1: Strict separation of financial logic from AI prompts -->
+
+<!-- Invariant Rule 5.2: Unified agent CLI tools/desk.py with strict omission of approve subcommand -->
 
 <!-- Invariant Rule 6.1: Memory-hard Argon2id credential storage and fail-closed key management -->
 
 <!-- Invariant Rule 7.1: Strict filesystem isolation and canonical path containment for case artifacts -->
 
 
-<!-- Invariant Verification: Permanent baseline certified across 211 automated test scenarios -->
+<!-- Invariant Verification: Permanent baseline certified across 227 automated test scenarios -->
