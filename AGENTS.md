@@ -105,5 +105,9 @@ All agents (Claude Code, OpenAI Codex, Antigravity, and any other automated or h
 
 <!-- Invariant Rule 5.1: Strict separation of financial logic from AI prompts -->
 
+<!-- Invariant Rule 6.1: Memory-hard Argon2id credential storage and fail-closed key management -->
+
+<!-- Invariant Rule 7.1: Strict filesystem isolation and canonical path containment for case artifacts -->
+
 
 <!-- Invariant Verification: Permanent baseline certified across 186 automated test scenarios -->
