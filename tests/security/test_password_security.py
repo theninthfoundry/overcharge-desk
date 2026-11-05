@@ -67,3 +67,14 @@ def test_exact_bounds_lengths_accepted():
     assert verify_password(max_pw, h_max) is True
 
 
+def test_empty_and_invalid_type_verify():
+    """Verify verify_password rejects None, empty strings, and non-strings safely."""
+    h = hash_password("ValidPassword123")
+    assert verify_password("", h) is False
+    assert verify_password(None, h) is False
+    assert verify_password(12345678, h) is False
+    assert verify_password("ValidPassword123", None) is False
+    assert verify_password("ValidPassword123", 999) is False
+
+
+
