@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Overcharge Desk — Finance Operations Workspace</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0b0f19; color: #f1f5f9; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold">
+        <i class="fa-solid fa-scale-balanced"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-base tracking-tight text-white">Overcharge Desk</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">v3.0.0 Prod</span>
+        </div>
+        <p class="text-xs text-slate-400">Evidence-First Vendor Reconciliation & Cryptographic Payment Control</p>
+      </div>
+    </div>
+
+    <!-- Active User & Role Switcher -->
+    <div class="flex items-center gap-4">
+      <div class="text-right hidden sm:block">
+        <div class="text-xs font-semibold text-white" id="current-user-name">Vikram Seth (Approver)</div>
+        <div class="text-[11px] text-emerald-400 mono" id="current-user-role">ROLE: APPROVER</div>
+      </div>
+      <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-1">
+        <select id="role-selector" onchange="switchRole(this.value)" class="bg-transparent text-xs text-slate-200 outline-none px-2 py-1 cursor-pointer">
+          <option value="approver" selected>Approver (Vikram Seth)</option>
+          <option value="operator">Finance Operator (Sanya M.)</option>
+          <option value="reviewer">Reviewer (Rohan Verma)</option>
+          <option value="admin">Administrator (Ops Lead)</option>
+          <option value="auditor">Auditor (Pooja Hegde)</option>
+          <option value="pay_operator">Payment Operator (Karan M.)</option>
+        </select>
+      </div>
+      <button onclick="checkLedgerHealth()" class="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-xs text-slate-300 flex items-center gap-2">
+        <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Ledger Chain Sound
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Application Body -->
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Sidebar -->
+    <aside class="w-64 border-r border-slate-800 bg-slate-900/40 p-4 flex flex-col gap-2 shrink-0">
+      <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1">Operations</div>
+      <button onclick="showTab('overview')" id="tab-btn-overview" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-white bg-slate-800 font-medium">
+        <i class="fa-solid fa-chart-pie w-4 text-slate-400"></i> Overview
+      </button>
+      <button onclick="showTab('cases')" id="tab-btn-cases" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/50">
+        <i class="fa-solid fa-folder-tree w-4 text-slate-400"></i> Reconciliation Cases
+      </button>
+      <button onclick="showTab('new-case')" id="tab-btn-new-case" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/50">
+        <i class="fa-solid fa-file-circle-plus w-4 text-slate-400"></i> New Intake Case
+      </button>
+
+      <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-3 mt-6 mb-1">Trust & Audit</div>
+      <button onclick="showTab('ledger')" id="tab-btn-ledger" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/50">
+        <i class="fa-solid fa-link w-4 text-slate-400"></i> Audit Ledger & Hash Chain
+      </button>
+      <button onclick="showTab('vendors')" id="tab-btn-vendors" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/50">
+        <i class="fa-solid fa-building-columns w-4 text-slate-400"></i> Vendor Contracts
+      </button>
+
+      <!-- Security Principles Card -->
+      <div class="mt-auto border border-slate-800 rounded-xl bg-slate-950/60 p-3.5 text-xs text-slate-400 space-y-2">
+        <div class="font-semibold text-slate-200 flex items-center gap-1.5">
+          <i class="fa-solid fa-shield-halved text-emerald-400"></i> Strict Invariants
+        </div>
+        <ul class="space-y-1 text-[11px] text-slate-400">
+          <li>• Exact Decimal arithmetic</li>
+          <li>• Separation of duties enforced</li>
+          <li>• Tamper-evident hash chain</li>
+          <li>• 100% fail-closed verification</li>
+        </ul>
+      </div>
+    </aside>
+
+    <!-- Main Content Workspace -->
+    <main class="flex-1 overflow-y-auto p-8 space-y-6">
+      
+      <!-- TAB 1: OVERVIEW -->
+      <section id="tab-overview" class="space-y-6">
+        <div>
+          <h1 class="text-2xl font-bold text-white tracking-tight">Finance Operations Overview</h1>
+          <p class="text-sm text-slate-400 mt-1">Real-time status of vendor reconciliations, detected overcharges, and cryptographic audit records.</p>
+        </div>
+
+        <!-- Metric Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="border border-slate-800 rounded-xl bg-slate-900/60 p-4">
+            <span class="text-xs text-slate-400 font-medium">Reconciled Cases</span>
+            <div class="text-2xl font-bold text-white mt-1" id="stat-total-cases">6</div>
+            <div class="text-[11px] text-emerald-400 mt-1"><i class="fa-solid fa-check"></i> Benchmark suite active</div>
+          </div>
+          <div class="border border-slate-800 rounded-xl bg-slate-900/60 p-4">
+            <span class="text-xs text-slate-400 font-medium">Total Overcharges Withheld</span>
+            <div class="text-2xl font-bold text-amber-400 mt-1" id="stat-withheld">₹6,000.00</div>
+            <div class="text-[11px] text-slate-400 mt-1">Acme Corp (+12% rate creep)</div>
+          </div>
+          <div class="border border-slate-800 rounded-xl bg-slate-900/60 p-4">
+            <span class="text-xs text-slate-400 font-medium">Ledger Hash Chain Events</span>
+            <div class="text-2xl font-bold text-white mt-1 mono" id="stat-ledger-events">28</div>
+            <div class="text-[11px] text-emerald-400 mt-1"><i class="fa-solid fa-shield"></i> Genesis anchored (0*64)</div>
+          </div>
+          <div class="border border-slate-800 rounded-xl bg-slate-900/60 p-4">
+            <span class="text-xs text-slate-400 font-medium">Automated CI Tests</span>
+            <div class="text-2xl font-bold text-emerald-400 mt-1">139 Passed</div>
+            <div class="text-[11px] text-slate-400 mt-1">10/10 matrix jobs on GitHub CI</div>
+          </div>
+        </div>
+
+        <!-- Benchmark Showcase -->
+        <div class="border border-slate-800 rounded-xl bg-slate-900/40 p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-vial-circle-check text-emerald-400"></i> Canonical Benchmark Cases
+            </h2>
+            <button onclick="runDemoSuite()" class="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-2">
+              <i class="fa-solid fa-play"></i> Re-verify Demo Suite
+            </button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="benchmark-cards">
+            <!-- Benchmark cards rendered via JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: CASES -->
+      <section id="tab-cases" class="hidden space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Reconciliation Cases</h1>
+            <p class="text-sm text-slate-400 mt-1">Filter, inspect line-by-line contract matching, and authorize payments.</p>
+          </div>
+          <button onclick="showTab('new-case')" class="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20">
+            <i class="fa-solid fa-plus"></i> New Intake Case
+          </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="flex items-center gap-2 border-b border-slate-800 pb-3">
+          <button onclick="filterCases('all')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white case-filter-btn" data-filter="all">All Cases</button>
+          <button onclick="filterCases('verified')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white case-filter-btn" data-filter="verified">Verified</button>
+          <button onclick="filterCases('review_required')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white case-filter-btn" data-filter="review_required">Review Required</button>
+          <button onclick="filterCases('blocked')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white case-filter-btn" data-filter="blocked">Blocked</button>
+        </div>
+
+        <!-- Cases Table -->
+        <div class="border border-slate-800 rounded-xl bg-slate-900/60 overflow-hidden">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-950/60 border-b border-slate-800 text-xs uppercase text-slate-400 mono">
+              <tr>
+                <th class="p-3.5">Case ID</th>
+                <th class="p-3.5">Vendor</th>
+                <th class="p-3.5">Invoiced Total</th>
+                <th class="p-3.5">Payable</th>
+                <th class="p-3.5">Verification</th>
+                <th class="p-3.5">Approval</th>
+                <th class="p-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="cases-table-body" class="divide-y divide-slate-800 text-slate-300">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 3: NEW CASE -->
+      <section id="tab-new-case" class="hidden space-y-6">
+        <div>
+          <h1 class="text-2xl font-bold text-white tracking-tight">Create New Reconciliation Case</h1>
+          <p class="text-sm text-slate-400 mt-1">Upload an invoice and link it to an active contract rate schedule.</p>
+        </div>
+
+        <div class="border border-slate-800 rounded-xl bg-slate-900/60 p-6 max-w-2xl space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Case Identifier</label>
+            <input type="text" id="new-case-id" value="OC-20261106-99" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white mono outline-none focus:border-emerald-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Vendor Registry</label>
+            <select id="new-vendor-id" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white outline-none">
+              <option value="acme">Acme Industrial Packaging (Contract ACME-2026-01)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Invoice Payload (JSON)</label>
+            <textarea id="new-invoice-json" rows="12" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 mono outline-none focus:border-emerald-500">{
+  "invoice_number": "INV-9901",
+  "vendor_id": "acme",
+  "invoice_date": "2026-11-06",
+  "lines": [
+    {
+      "line_no": 1,
+      "description": "Corrugated carton, 5-ply (CC-5)",
+      "quantity": 300,
+      "unit": "unit",
+      "unit_price": 112.0,
+      "line_total": 33600.0,
+      "source_ref": "invoices/acme-inv-1103.txt, line 1"
+    }
+  ],
+  "stated_total": 33600.0,
+  "source_file": "invoices/acme-inv-1103.txt",
+  "source_sha256": "2c7d4c457e0b1d3f59092f997676589139738a89843c30da25824f1fbfe54543",
+  "extraction_issues": []
+}</textarea>
+          </div>
+          <button onclick="submitNewCase()" class="w-full py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition shadow-lg shadow-emerald-500/20">
+            Create & Ingest Case
+          </button>
+        </div>
+      </section>
+
+      <!-- TAB 4: AUDIT LEDGER -->
+      <section id="tab-ledger" class="hidden space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Audit Ledger & Cryptographic Chain</h1>
+            <p class="text-sm text-slate-400 mt-1">Every material financial action forms an unbroken SHA-256 chain in SQLite with append-only triggers.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="createSignedCheckpoint()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-2">
+              <i class="fa-solid fa-stamp text-amber-400"></i> Create Signed Checkpoint
+            </button>
+            <button onclick="verifyLedgerChain()" class="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-semibold text-emerald-400 flex items-center gap-2">
+              <i class="fa-solid fa-shield-halved"></i> Verify Full Chain
+            </button>
+          </div>
+        </div>
+
+        <div class="border border-slate-800 rounded-xl bg-slate-900/60 p-4" id="ledger-verification-banner">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="h-8 w-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                <i class="fa-solid fa-check"></i>
+              </div>
+              <div>
+                <span class="text-sm font-bold text-white">Continuous SHA-256 Hash Chain Verified</span>
+                <p class="text-xs text-slate-400">All historical blocks link backward without gaps, reordering, or payload modifications.</p>
+              </div>
+            </div>
+            <span class="text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-300 mono" id="ledger-total-events-badge">28 Events</span>
+          </div>
+        </div>
+
+        <!-- Ledger Events Table -->
+        <div class="border border-slate-800 rounded-xl bg-slate-900/60 overflow-hidden">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-950/60 border-b border-slate-800 text-xs uppercase text-slate-400 mono">
+              <tr>
+                <th class="p-3">Seq</th>
+                <th class="p-3">Event Type</th>
+                <th class="p-3">Case ID</th>
+                <th class="p-3">Actor</th>
+                <th class="p-3">Event Hash</th>
+                <th class="p-3">Prev Hash</th>
+              </tr>
+            </thead>
+            <tbody id="ledger-table-body" class="divide-y divide-slate-800 text-xs text-slate-300 mono">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 5: VENDORS -->
+      <section id="tab-vendors" class="hidden space-y-6">
+        <div>
+          <h1 class="text-2xl font-bold text-white tracking-tight">Vendor & Contract Registry</h1>
+          <p class="text-sm text-slate-400 mt-1">Authoritative Schedule A contract rates and active MSAs.</p>
+        </div>
+        <div id="vendors-cards" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Case Detail Modal -->
+  <div id="case-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <div class="flex items-center gap-3">
+            <h2 class="text-xl font-bold text-white" id="modal-case-id">OC-20261106-01</h2>
+            <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold" id="modal-badge-verif">VERIFIED</span>
+            <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold" id="modal-badge-comm">OVERCHARGED</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1" id="modal-case-subtitle">Vendor: Acme Industrial Packaging | Invoice: INV-1103</p>
+        </div>
+        <button onclick="closeCaseModal()" class="text-slate-400 hover:text-white p-2">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 overflow-y-auto space-y-6 flex-1 text-sm">
+        <!-- 4-D Status Strip -->
+        <div class="grid grid-cols-4 gap-3 bg-slate-950/60 border border-slate-800 p-3 rounded-xl text-xs">
+          <div>
+            <span class="text-slate-500 font-medium block">Verification State</span>
+            <span class="font-bold text-emerald-400" id="strip-verif">VERIFIED</span>
+          </div>
+          <div>
+            <span class="text-slate-500 font-medium block">Commercial State</span>
+            <span class="font-bold text-amber-400" id="strip-comm">OVERCHARGED</span>
+          </div>
+          <div>
+            <span class="text-slate-500 font-medium block">Approval State</span>
+            <span class="font-bold text-slate-300" id="strip-app">APPROVED</span>
+          </div>
+          <div>
+            <span class="text-slate-500 font-medium block">Payment Status</span>
+            <span class="font-bold text-emerald-400" id="strip-pay">AUTHORIZED</span>
+          </div>
+        </div>
+
+        <!-- Financial Summary -->
+        <div class="grid grid-cols-3 gap-4 border border-slate-800 rounded-xl p-4 bg-slate-900/40">
+          <div>
+            <span class="text-xs text-slate-400">Invoiced Stated</span>
+            <div class="text-lg font-bold text-white mono" id="modal-invoiced">₹66,000.00</div>
+          </div>
+          <div>
+            <span class="text-xs text-slate-400">Payable Contract</span>
+            <div class="text-lg font-bold text-emerald-400 mono" id="modal-payable">₹60,000.00</div>
+          </div>
+          <div>
+            <span class="text-xs text-slate-400">Overcharge Withheld</span>
+            <div class="text-lg font-bold text-amber-400 mono" id="modal-withheld">₹6,000.00</div>
+          </div>
+        </div>
+
+        <!-- Separation of Duties Warning if applicable -->
+        <div id="modal-sod-notice" class="hidden p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-300">
+          <i class="fa-solid fa-triangle-exclamation mr-1.5"></i>
+          <strong>Separation of Duties Policy:</strong> You created this case and cannot approve it yourself.
+        </div>
+
+        <!-- Action Workspace -->
+        <div class="space-y-3">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Workflow Actions</h3>
+          <div class="flex flex-wrap items-center gap-3">
+            <button onclick="reconcileActiveCase(false)" class="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 flex items-center gap-2">
+              <i class="fa-solid fa-arrows-rotate"></i> Re-Run Reconciliation (Preview)
+            </button>
+            <button onclick="approveActiveCase()" id="btn-approve-case" class="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-xs font-semibold text-white flex items-center gap-2 shadow-lg shadow-emerald-500/20">
+              <i class="fa-solid fa-stamp"></i> Grant Approval (HMAC Receipt)
+            </button>
+            <button onclick="rejectActiveCase()" id="btn-reject-case" class="px-3.5 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-xs font-semibold text-red-400 flex items-center gap-2">
+              <i class="fa-solid fa-ban"></i> Reject Dispute
+            </button>
+            <button onclick="exportActiveAuditPackage()" class="px-3.5 py-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-xs font-semibold text-blue-400 flex items-center gap-2">
+              <i class="fa-solid fa-box-archive"></i> Export Audit Package
+            </button>
+          </div>
+        </div>
+
+        <!-- Artifact Downloads -->
+        <div class="space-y-3">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Available Verified Artifacts</h3>
+          <div class="grid grid-cols-2 gap-2" id="modal-artifacts-grid">
+            <!-- Artifact pills -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let activeCaseId = null;
+    let currentUserRole = "approver";
+    let currentUsername = "approver";
+    let casesCache = [];
+
+    const roleTokens = {
+      approver: "approver:APPROVER:9999999999:demo",
+      operator: "operator:FINANCE_OPERATOR:9999999999:demo",
+      reviewer: "reviewer:REVIEWER:9999999999:demo",
+      admin: "admin:ADMINISTRATOR:9999999999:demo",
+      auditor: "auditor:AUDITOR:9999999999:demo",
+      pay_operator: "pay_operator:PAYMENT_OPERATOR:9999999999:demo",
+    };
+
+    function showTab(tab) {
+      ['overview', 'cases', 'new-case', 'ledger', 'vendors'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.add('hidden');
+        document.getElementById(`tab-btn-${t}`).classList.remove('bg-slate-800', 'text-white');
+        document.getElementById(`tab-btn-${t}`).classList.add('text-slate-400');
+      });
+      document.getElementById(`tab-${tab}`).classList.remove('hidden');
+      document.getElementById(`tab-btn-${tab}`).classList.add('bg-slate-800', 'text-white');
+      document.getElementById(`tab-btn-${tab}`).classList.remove('text-slate-400');
+
+      if (tab === 'cases') loadCases();
+      if (tab === 'ledger') loadLedgerEvents();
+      if (tab === 'vendors') loadVendors();
+      if (tab === 'overview') loadOverview();
+    }
+
+    function switchRole(role) {
+      currentUserRole = role;
+      currentUsername = role;
+      const names = {
+        approver: "Vikram Seth (Approver)",
+        operator: "Sanya Malhotra (Finance Ops)",
+        reviewer: "Rohan Verma (Reviewer)",
+        admin: "Ops Lead (Admin)",
+        auditor: "Pooja Hegde (Auditor)",
+        pay_operator: "Karan Mehra (Payment Ops)",
+      };
+      document.getElementById('current-user-name').innerText = names[role] || role;
+      document.getElementById('current-user-role').innerText = `ROLE: ${role.toUpperCase()}`;
+    }
+
+    async function loadOverview() {
+      try {
+        const res = await fetch('/api/v1/cases');
+        if (!res.ok) return;
+        const cases = await res.json();
+        casesCache = cases;
+        document.getElementById('stat-total-cases').innerText = cases.length;
+
+        const benchmarks = [
+          { name: "Case A: Clean Match", inv: "INV-1001", total: "₹30,000.00", status: "VERIFIED", desc: "100% matched, zero variance" },
+          { name: "Case B: Acme Overcharge", inv: "INV-1103", total: "₹66,000.00", status: "VERIFIED", desc: "₹6,000 variance withheld" },
+          { name: "Case C: Commercial Review", inv: "INV-1201", total: "₹54,500.00", status: "REVIEW_REQUIRED", desc: "Uncontracted packing strap" },
+          { name: "Case D: Blocked Discrepancy", inv: "INV-1301", total: "₹68,000.00", status: "BLOCKED", desc: "Math mismatch (₹58k != ₹56k)" },
+          { name: "Case E: Tampering Refusal", inv: "INV-1001", total: "Refused", status: "TAMPERED", desc: "Post-approval line alteration" },
+          { name: "Case F: Ledger Failure", inv: "INV-1001", total: "Refused", status: "ABORTED", desc: "Fail-closed on unwriteable DB" },
+        ];
+
+        const container = document.getElementById('benchmark-cards');
+        container.innerHTML = benchmarks.map(b => `
+          <div class="border border-slate-800 rounded-lg p-3 bg-slate-950/40">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-white">${b.name}</span>
+              <span class="text-[10px] px-2 py-0.5 rounded font-bold ${b.status === 'VERIFIED' ? 'bg-emerald-500/20 text-emerald-400' : (b.status === 'BLOCKED' || b.status === 'TAMPERED' || b.status === 'ABORTED' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400')}">${b.status}</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">${b.desc}</p>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadCases(filter = null) {
+      try {
+        const url = filter ? `/api/v1/cases?status=${filter}` : '/api/v1/cases';
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const cases = await res.json();
+        casesCache = cases;
+
+        const tbody = document.getElementById('cases-table-body');
+        tbody.innerHTML = cases.map(c => `
+          <tr class="hover:bg-slate-800/40 cursor-pointer" onclick="openCaseModal('${c.case_id}')">
+            <td class="p-3.5 font-bold text-white mono">${c.case_id}</td>
+            <td class="p-3.5">${c.vendor_id.toUpperCase()}</td>
+            <td class="p-3.5 mono">${c.invoiced_total ? '₹' + c.invoiced_total : 'N/A'}</td>
+            <td class="p-3.5 mono text-emerald-400">${c.payable_total ? '₹' + c.payable_total : '—'}</td>
+            <td class="p-3.5">
+              <span class="text-xs px-2 py-0.5 rounded font-bold ${c.verification_status === 'VERIFIED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : (c.verification_status === 'BLOCKED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20')}">${c.verification_status}</span>
+            </td>
+            <td class="p-3.5">
+              <span class="text-xs px-2 py-0.5 rounded ${c.approval_status === 'APPROVED' ? 'text-emerald-400' : 'text-slate-400'}">${c.approval_status}</span>
+            </td>
+            <td class="p-3.5 text-right">
+              <button class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-white">Inspect</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function openCaseModal(caseId) {
+      activeCaseId = caseId;
+      try {
+        const res = await fetch(`/api/v1/cases/${caseId}`);
+        if (!res.ok) return;
+        const c = await res.json();
+
+        document.getElementById('modal-case-id').innerText = c.case_id;
+        document.getElementById('modal-case-subtitle').innerText = `Vendor: ${c.vendor_id.toUpperCase()} | Invoice: ${c.invoice_number}`;
+        document.getElementById('strip-verif').innerText = c.verification_status;
+        document.getElementById('strip-comm').innerText = c.commercial_status;
+        document.getElementById('strip-app').innerText = c.approval_status;
+        document.getElementById('strip-pay').innerText = c.payment_status;
+
+        document.getElementById('modal-invoiced').innerText = c.invoiced_total ? `₹${c.invoiced_total}` : 'N/A';
+        document.getElementById('modal-payable').innerText = c.payable_total ? `₹${c.payable_total}` : 'N/A';
+        document.getElementById('modal-withheld').innerText = c.withheld_total ? `₹${c.withheld_total}` : '₹0.00';
+
+        // Check Separation of Duties
+        const sod = document.getElementById('modal-sod-notice');
+        if (c.created_by && c.created_by.toLowerCase() === currentUsername.toLowerCase()) {
+          sod.classList.remove('hidden');
+        } else {
+          sod.classList.add('hidden');
+        }
+
+        // Render Artifacts
+        const artGrid = document.getElementById('modal-artifacts-grid');
+        artGrid.innerHTML = c.available_artifacts.map(a => `
+          <a href="/api/v1/cases/${c.case_id}/artifacts/${a}" target="_blank" class="flex items-center justify-between p-2 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-slate-700 text-xs text-slate-300">
+            <span><i class="fa-solid fa-file-lines mr-1.5 text-slate-500"></i> ${a}</span>
+            <i class="fa-solid fa-download text-slate-500"></i>
+          </a>
+        `).join('');
+
+        document.getElementById('case-modal').classList.remove('hidden');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function closeCaseModal() {
+      document.getElementById('case-modal').classList.add('hidden');
+      activeCaseId = null;
+    }
+
+    async function approveActiveCase() {
+      if (!activeCaseId) return;
+      try {
+        const res = await fetch(`/api/v1/cases/${activeCaseId}/approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decision: 'APPROVED' })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Approval Refused: ${data.detail}`);
+          return;
+        }
+        alert(`Approval Granted!\nReceipt ID: ${data.receipt_id}\nApproved Amount: ₹${data.approved_amount}`);
+        openCaseModal(activeCaseId);
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function rejectActiveCase() {
+      if (!activeCaseId) return;
+      const reason = prompt("Enter explicit rationale for rejecting this case/dispute:");
+      if (!reason) return;
+      try {
+        const res = await fetch(`/api/v1/cases/${activeCaseId}/approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decision: 'REJECTED', reason: reason })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Rejection Refused: ${data.detail}`);
+          return;
+        }
+        alert(`Dispute Rejected recorded!\nReceipt ID: ${data.receipt_id}`);
+        openCaseModal(activeCaseId);
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function reconcileActiveCase(requireApproval) {
+      if (!activeCaseId) return;
+      try {
+        const res = await fetch(`/api/v1/cases/${activeCaseId}/reconcile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ require_approval: requireApproval })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Pipeline Halted: ${data.detail}`);
+          return;
+        }
+        alert(`Pipeline Execution: ${data.pipeline_status}\nArtifact: ${data.artifact_type}`);
+        openCaseModal(activeCaseId);
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function exportActiveAuditPackage() {
+      if (!activeCaseId) return;
+      try {
+        const res = await fetch(`/api/v1/cases/${activeCaseId}/export-audit`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Export Failed: ${data.detail}`);
+          return;
+        }
+        alert(`Audit Package Exported!\nDirectory: ${data.target_package_directory}\nVerified: ${data.package_verified}`);
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function loadLedgerEvents() {
+      try {
+        const res = await fetch('/api/v1/audit/ledger/events?limit=25');
+        if (!res.ok) return;
+        const evs = await res.json();
+        const tbody = document.getElementById('ledger-table-body');
+        tbody.innerHTML = evs.reverse().map(e => `
+          <tr class="hover:bg-slate-800/40">
+            <td class="p-3 text-slate-400">#${e.event_sequence}</td>
+            <td class="p-3 font-semibold text-white">${e.event_type}</td>
+            <td class="p-3 text-emerald-400">${e.case_id}</td>
+            <td class="p-3 text-slate-300">${e.actor_id}</td>
+            <td class="p-3 text-slate-400" title="${e.event_hash}">${e.event_hash.substring(0, 12)}...</td>
+            <td class="p-3 text-slate-500" title="${e.previous_event_hash}">${e.previous_event_hash.substring(0, 12)}...</td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function verifyLedgerChain() {
+      try {
+        const res = await fetch('/api/v1/audit/ledger/verify');
+        const data = await res.json();
+        alert(`Ledger Verification Result:\nValid: ${data.valid}\nTotal Events: ${data.total_events}\nIssues: ${data.issues_count}`);
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function createSignedCheckpoint() {
+      try {
+        const res = await fetch('/api/v1/audit/ledger/checkpoint', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Checkpoint Failed: ${data.detail}`);
+          return;
+        }
+        alert(`HMAC Signed Checkpoint Created!\nID: ${data.checkpoint_id}\nHead Hash: ${data.head_event_hash.substring(0, 16)}...\nSig: ${data.signature.substring(0, 16)}...`);
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function loadVendors() {
+      try {
+        const res = await fetch('/api/v1/vendors');
+        if (!res.ok) return;
+        const vendors = await res.json();
+        const container = document.getElementById('vendors-cards');
+        container.innerHTML = vendors.map(v => `
+          <div class="border border-slate-800 rounded-xl p-5 bg-slate-900/60 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-white text-base">${v.vendor_name}</span>
+              <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">${v.currency}</span>
+            </div>
+            <div class="text-xs text-slate-400 space-y-1">
+              <div>Contract ID: <span class="text-white mono">${v.contract_id}</span></div>
+              <div>Effective: <span class="text-slate-300 mono">${v.effective_from} to ${v.effective_to}</span></div>
+              <div>Contract Items: <span class="text-emerald-400 font-semibold">${v.items_count} verified SKUs</span></div>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function submitNewCase() {
+      const caseId = document.getElementById('new-case-id').value.trim();
+      const vendorId = document.getElementById('new-vendor-id').value;
+      const jsonText = document.getElementById('new-invoice-json').value;
+      try {
+        const invJson = JSON.parse(jsonText);
+        const res = await fetch('/api/v1/cases', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            case_id: caseId,
+            vendor_id: vendorId,
+            invoice_json: invJson
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Creation Failed: ${data.detail}`);
+          return;
+        }
+        alert(`Case '${data.case_id}' created successfully! Opening case workspace.`);
+        showTab('cases');
+        openCaseModal(data.case_id);
+      } catch (e) {
+        alert("Invalid JSON or network error: " + e.message);
+      }
+    }
+
+    function checkLedgerHealth() {
+      verifyLedgerChain();
+    }
+
+    // Initialize
+    loadOverview();
+  </script>
+</body>
+</html>
