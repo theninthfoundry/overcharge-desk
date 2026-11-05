@@ -77,4 +77,11 @@ def test_empty_and_invalid_type_verify():
     assert verify_password("ValidPassword123", 999) is False
 
 
+def test_truncated_pbkdf2_hash_rejected():
+    """Verify malformed pbkdf2 hashes with missing delimiters fail-closed."""
+    assert verify_password("password123", "$pbkdf2-sha256$i=600000$bad") is False
+    assert verify_password("password123", "$pbkdf2-sha256$i=notanint$salt$hash") is False
+
+
+
 
