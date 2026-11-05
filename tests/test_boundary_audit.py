@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Tests for Phase 2.1 Financial Boundary Audit.
 
 Verifies:
@@ -317,8 +319,9 @@ def test_pipeline_execution_verified(tmp_path):
     summary = run_pipeline(inv_path, vendor_path, out_dir)
     assert summary["ok"] is True
     assert summary["verification_status"] == STATE_VERIFIED
-    assert summary["artifact_type"] == "corrected_payment"
-    assert (out_dir / "corrected_payment.csv").exists()
+    # Unapproved run emits pre-approval payment_preview.csv, never unauthorized corrected_payment.csv
+    assert summary["artifact_type"] == "payment_preview"
+    assert (out_dir / "payment_preview.csv").exists()
     assert (out_dir / "compare.json.sha256").exists()
 
 
