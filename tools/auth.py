@@ -31,7 +31,25 @@ from typing import Any, Dict, List, Optional, Tuple
 from common import ToolError, emit, load_json, run_cli, utc_now_iso
 
 DEFAULT_ACTORS_CONFIG = Path("config/actors.json")
-DEFAULT_KEY_FILE = Path("config/signing.key")
+
+
+def get_default_key_dir() -> Path:
+    """Return the configured key directory outside the repository root."""
+    env_dir = os.getenv("OVERCHARGE_KEY_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path.home() / ".overcharge" / "keys"
+
+
+def get_default_key_path() -> Path:
+    """Return the configured or default signing key file path."""
+    env_key = os.getenv("OVERCHARGE_SIGNING_KEY")
+    if env_key:
+        return Path(env_key)
+    return get_default_key_dir() / "signing.key"
+
+
+DEFAULT_KEY_FILE = get_default_key_path()
 DEFAULT_TOKEN_TTL = 300  # 5 minutes
 
 ROLES = ("SYSTEM", "REVIEWER", "APPROVER", "ADMINISTRATOR")
@@ -76,15 +94,15 @@ ROLE_PERMISSIONS: Dict[str, List[str]] = {
 
 def load_signing_key(key_file: Path | str | None = None) -> bytes:
     """Load HMAC signing key bytes from file, failing closed if missing or empty."""
-    target = Path(key_file) if key_file else DEFAULT_KEY_FILE
+    target = Path(key_file) if key_file else get_default_key_path()
     if not target.exists():
-        # Look in config directory relative to script
+        # Fallback check for legacy location
         alt = Path(__file__).resolve().parent.parent / "config" / "signing.key"
         if alt.exists():
             target = alt
         else:
             raise ToolError(
-                f"Signing key file not found: {target}. Generate one or specify via --key-file",
+                f"Signing key file not found: {target}. Generate one or specify via --key-file / OVERCHARGE_KEY_DIR",
                 4,
             )
 
@@ -103,7 +121,7 @@ def load_signing_key(key_file: Path | str | None = None) -> bytes:
 
 def ensure_signing_key(key_file: Path | str | None = None) -> bytes:
     """Ensure a signing key exists, generating a strong 32-byte key if absent."""
-    target = Path(key_file) if key_file else DEFAULT_KEY_FILE
+    target = Path(key_file) if key_file else get_default_key_path()
     if target.exists():
         return load_signing_key(target)
 
@@ -245,6 +263,7 @@ def main() -> int:
     issue_cmd.add_argument("actor_id", help="Actor identifier (e.g. 'owner', 'reviewer')")
     issue_cmd.add_argument("--key-file", help="Path to signing key file")
     issue_cmd.add_argument("--config", help="Path to actors.json config")
+    issue_cmd.add_argument("--dev", action="store_true", help="Explicit development flag allowing CLI token minting")
 
     verify_cmd = sub.add_parser("verify-token", help="Verify an actor token")
     verify_cmd.add_argument("token", help="Token string to verify")
@@ -263,6 +282,13 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.cmd == "issue-token":
+        if not args.dev:
+            emit({
+                "ok": False,
+                "error": "CLI token minting is disabled in production. Use --dev for local testing or authenticate via tools/approve.py.",
+                "code": 4
+            })
+            return 4
         key = load_signing_key(args.key_file)
         cfg = load_actors_config(args.config)
         token = issue_actor_token(args.actor_id, key, config=cfg)
