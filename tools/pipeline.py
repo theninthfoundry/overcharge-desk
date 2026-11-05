@@ -53,6 +53,7 @@ PIPELINE_VERSION = "2.1.0"
 
 
 def run_pipeline(
+    # Reconciliation Pipeline: Formal 13-stage verification, reconciliation, and payment control
     invoice_path: Path | str,
     vendor_path: Path | str,
     out_dir: Path | str,
