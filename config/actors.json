@@ -1,0 +1,68 @@
+{
+  "config_version": "1.0.0",
+  "signing_key_file": "config/signing.key",
+  "token_validity_seconds": 300,
+  "actors": [
+    {
+      "actor_id": "system",
+      "display_name": "System Reconciliation Pipeline",
+      "role": "SYSTEM",
+      "authentication_method": "config_file",
+      "active": true,
+      "permissions": [
+        "register_evidence",
+        "validate_invoice",
+        "run_comparison",
+        "generate_artifacts",
+        "record_ledger"
+      ]
+    },
+    {
+      "actor_id": "owner",
+      "display_name": "Business Financial Owner",
+      "role": "APPROVER",
+      "authentication_method": "hmac_sha256_token",
+      "active": true,
+      "permissions": [
+        "view_cases",
+        "approve_case",
+        "reject_case",
+        "view_approvals",
+        "record_ledger"
+      ]
+    },
+    {
+      "actor_id": "reviewer",
+      "display_name": "Commercial Invoice Reviewer",
+      "role": "REVIEWER",
+      "authentication_method": "hmac_sha256_token",
+      "active": true,
+      "permissions": [
+        "view_cases",
+        "add_review_notes",
+        "request_approval"
+      ]
+    },
+    {
+      "actor_id": "admin",
+      "display_name": "System Administrator",
+      "role": "ADMINISTRATOR",
+      "authentication_method": "hmac_sha256_token",
+      "active": true,
+      "permissions": [
+        "register_evidence",
+        "validate_invoice",
+        "run_comparison",
+        "generate_artifacts",
+        "view_cases",
+        "add_review_notes",
+        "request_approval",
+        "approve_case",
+        "reject_case",
+        "view_approvals",
+        "record_ledger",
+        "administer_system"
+      ]
+    }
+  ]
+}
