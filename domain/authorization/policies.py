@@ -42,12 +42,15 @@ ROLE_PERMISSIONS: Dict[str, Set[str]] = {
     SystemRole.REVIEWER: {
         PERM_CASE_READ,
         PERM_CASE_REVIEW,
+        PERM_AUDIT_READ,
     },
     SystemRole.APPROVER: {
         PERM_CASE_READ,
         PERM_CASE_REVIEW,
         PERM_CASE_APPROVE,
         PERM_CASE_REJECT,
+        PERM_AUDIT_READ,
+        PERM_AUDIT_CHECKPOINT,
     },
     SystemRole.AUDITOR: {
         PERM_CASE_READ,

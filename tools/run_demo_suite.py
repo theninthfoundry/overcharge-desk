@@ -53,9 +53,25 @@ def run_full_demo(
 
     cases_root = Path(cases_base_dir) if cases_base_dir else root / "cases"
 
-    # Reset ledger if clean run requested
-    if clean_run and ledger_db.exists():
-        ledger_db.unlink()
+    # Reset ledger and transient demo artifacts if clean run requested
+    if clean_run:
+        if ledger_db.exists():
+            ledger_db.unlink()
+        for c_name in ("demo-clean", "demo-overcharge", "demo-review", "demo-blocked"):
+            c_dir = cases_root / c_name
+            if c_dir.exists():
+                shutil.rmtree(c_dir / "approvals", ignore_errors=True)
+                shutil.rmtree(c_dir / "audit", ignore_errors=True)
+                for art in (
+                    "compare.json",
+                    "manifest.json",
+                    "evidence_registry.json",
+                    "payment_preview.csv",
+                    "corrected_payment.csv",
+                    "partial_review.csv",
+                    "blocked_review_report.csv",
+                ):
+                    (c_dir / art).unlink(missing_ok=True)
 
     # -------------------------------------------------------------------------
     # Case A: Clean Match (100% Verified, Zero Variance)
@@ -207,6 +223,7 @@ def run_full_demo(
     # Case E: Post-Approval Evidence Tampering (Fail-Closed Refusal)
     # -------------------------------------------------------------------------
     case_e_dir = cases_root / "demo-tampering"
+    shutil.rmtree(case_e_dir, ignore_errors=True)
     case_e_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(case_a_inv, case_e_dir / "invoice.json")
     case_e_inv = case_e_dir / "invoice.json"
@@ -257,6 +274,7 @@ def run_full_demo(
     # Case F: Audit Ledger Failure (Fail-Closed Refusal)
     # -------------------------------------------------------------------------
     case_f_dir = cases_root / "demo-ledger-failure"
+    shutil.rmtree(case_f_dir, ignore_errors=True)
     case_f_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(case_a_inv, case_f_dir / "invoice.json")
     case_f_inv = case_f_dir / "invoice.json"

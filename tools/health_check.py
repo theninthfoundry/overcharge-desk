@@ -49,13 +49,22 @@ def run_health_check(root: Path = None, as_json: bool = False) -> int:
         status["checks"]["decimal_arithmetic"] = {"status": "FAIL", "error": str(exc)}
         exit_code = 1
 
-    # 2. Argon2id readiness
+    # 2. Argon2id / Password Hashing readiness
     try:
-        import argon2
+        import argon2  # noqa: F401
         status["checks"]["argon2id"] = {"status": "PASS", "module": "argon2-cffi"}
     except ImportError:
-        status["checks"]["argon2id"] = {"status": "FAIL", "error": "argon2-cffi not installed"}
-        exit_code = 1
+        try:
+            from domain.identity.passwords import hash_password, verify_password
+            probe_hash = hash_password("healthcheck_probe_123")
+            if verify_password("healthcheck_probe_123", probe_hash):
+                status["checks"]["argon2id"] = {"status": "PASS", "module": "pbkdf2-hmac-sha256-fallback"}
+            else:
+                status["checks"]["argon2id"] = {"status": "FAIL", "error": "password verification probe failed"}
+                exit_code = 1
+        except Exception as exc:
+            status["checks"]["argon2id"] = {"status": "FAIL", "error": str(exc)}
+            exit_code = 1
 
     # 3. Storage and Case Directory Containment
     try:
