@@ -10,7 +10,7 @@
 
 Overcharge Desk enforces a zero-trust, test-driven engineering culture. No feature or security boundary is considered complete without automated test execution verifying both nominal and adversarial behaviors.
 
-The automated test suite contains **154 passing tests** across 11 test modules:
+The automated test suite contains **227 passing tests** across 21 test modules:
 
 ```text
 ============================= test session starts =============================
@@ -18,21 +18,32 @@ platform win32 -- Python 3.13.5, pytest-9.1.0
 rootdir: D:\overcharge files
 configfile: pytest.ini
 testpaths: tests
-collected 154 items
+collected 227 items
 
-tests/test_api.py ...................... [10 tests: FastAPI operations API, auth, cases, artifacts, ledger]
-tests/test_audit_ledger.py .............. [11 tests: Genesis, chain links, triggers, tampering, gaps, checkpoints]
-tests/test_auth_and_approval.py ......... [15 tests: HMAC tokens, TTL, role permissions, signed receipts, gateway]
-tests/test_boundary_audit.py ............ [20 tests: 4-tier artifact model, path traversal, injection, digests]
-tests/test_case_manager_and_evidence.py . [ 8 tests: Directory layout, state transitions, SHA-256 tracking]
-tests/test_compare.py .................. [21 tests: Exact decimal precision, rounding, SKU boundaries, dates]
-tests/test_financial_adversarial.py .... [35 tests: Non-finite inputs, negative numbers, formula injection]
-tests/test_pipeline_orchestration.py .... [ 3 tests: Manifest generation, approval enforcement, recovery]
-tests/test_rbac_and_separation_of_duties.py [ 5 tests: RBAC policies, separation of duties, self-approval prevention]
-tests/test_tools.py .................... [25 tests: CLI utilities, error exits, seed parity]
-tests/test_demo_cases.py ................ [ 1 test:  Full 6-case benchmark suite + audit package export]
-
-============================= 154 passed in ~8s =============================
+tests/concurrency/test_concurrency_and_transitions.py   6 passed (Optimistic locking, rollback, version race)
+tests/payments/test_payment_instructions.py             6 passed (Instruction lifecycle, single export, audit trail)
+tests/payments/test_vendor_registry.py                  2 passed (Verified bank account gates, unverified block)
+tests/security/test_api_security.py                     7 passed (Security headers, CSP, brute-force lockout, generic auth)
+tests/security/test_bootstrap_admin.py                  4 passed (Interactive getpass, demo seed isolation, duplicate block)
+tests/security/test_identity_repository.py              3 passed (Argon2id persistence, session tokens, audit logging)
+tests/security/test_key_manager.py                      7 passed (Key rotation, retirement, revocation, production gates)
+tests/security/test_operational_health.py               4 passed (LIVE, READY, DEGRADED probes, component health)
+tests/security/test_password_security.py                8 passed (Argon2id hashing, bounds checking, constant-time compare)
+tests/security/test_storage_security.py                 9 passed (Path traversal guards, symlink containment, 10MB limits)
+tests/test_api.py                                      10 passed (FastAPI endpoints, auth, cases, artifacts, audit)
+tests/test_approve_cli.py                               6 passed (TTY enforcement, Argon2id auth, 64-char receipt hash)
+tests/test_audit_ledger.py                             11 passed (Genesis block, triggers, tamper detection, checkpoints)
+tests/test_auth_and_approval.py                        15 passed (HMAC tokens, TTL, role permissions, signed receipts)
+tests/test_boundary_audit.py                           20 passed (4-tier routing, path traversal, injection prevention)
+tests/test_case_manager_and_evidence.py                 8 passed (Directory layout, state transitions, SHA-256 tracking)
+tests/test_compare.py                                  21 passed (Decimal precision, half-up rounding, SKU boundaries)
+tests/test_demo_cases.py                                1 passed (Full 6-case benchmark & package export suite)
+tests/test_desk_cli.py                                  9 passed (Agent CLI, no approve command, memory moment, key isolation)
+tests/test_financial_adversarial.py                    35 passed (Invalid numbers, negative quantities, formula injection)
+tests/test_pipeline_orchestration.py                    3 passed (Execution manifests, approval enforcement, recovery)
+tests/test_rbac_and_separation_of_duties.py            5 passed (Separation of duties, allowlists, token lifecycle)
+tests/test_tools.py                                    25 passed (CLI utilities, error exits, seed parity)
+============================= 227 passed in ~14s =============================
 ```
 
 ---
@@ -105,3 +116,24 @@ Continuously runs the complete 6-case benchmark suite in CI:
 - **Case E** (Post-approval evidence tampering refusal)
 - **Case F** (Audit ledger failure abort)
 - Plus standalone Case Audit Package export and cryptographic verification.
+
+### 2.8 Terminal Owner Approval Suite (`test_approve_cli.py` — 6 tests)
+Verifies out-of-band interactive human approval boundaries:
+- Mandatory interactive TTY gate refusing piped and automated script execution.
+- Fail-closed refusal on empty or invalid approver passwords.
+- Refusal of users lacking `APPROVER` or `ADMINISTRATOR` authority.
+- Refusal to approve non-`VERIFIED` cases (e.g. arithmetic discrepancies).
+- Generation of full 64-character SHA-256 receipts and Switch notification text.
+- Token minting lockdown (`tools/auth.py issue-token` requires explicit `--dev`).
+
+### 2.9 Unified Agent Desk CLI Suite (`test_desk_cli.py` — 9 tests)
+Verifies multi-agent command boundaries:
+- Strict rejection of `approve` subcommand (ensures agents cannot approve payments).
+- `status` command returning 4-dimensional state tracking and financial totals.
+- `audit` command emitting full 64-character SHA-256 digests and pre-approval previews.
+- `audit` failing closed with exit code 2 on arithmetic discrepancies.
+- `history --vendor acme` querying past cases across all ledger records (memory moment).
+- `finalize` failing closed without signed approval receipts.
+- `finalize` releasing authorized payment sheet upon valid receipt.
+- `intake` workflow copying evidence, registering source SHA-256 fingerprints.
+- Invariant verification confirming zero `.key` or `keys_manifest.json` files reside in repo tree.
