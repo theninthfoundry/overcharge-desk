@@ -64,6 +64,7 @@ def test_monotonic_hash_chain_verification(test_db):
 
 
 def test_tampered_payload_in_historical_event_detected(test_db):
+    # Integrity Test: Verifies that database modification of historical payloads breaks hash chain
     record_event("OC-20261106-01", "CASE_CREATED", "SYSTEM", {"amount": "100.00"}, db_path=test_db)
     record_event("OC-20261106-01", "APPROVAL_GRANTED", "owner", {"amount": "100.00"}, db_path=test_db)
     record_event("OC-20261106-01", "CASE_CLOSED", "SYSTEM", {"closed": True}, db_path=test_db)
@@ -150,3 +151,4 @@ def test_empty_ledger_is_valid(test_db):
     valid, issues = verify_ledger(test_db)
     assert valid is True
     assert len(issues) == 0
+
