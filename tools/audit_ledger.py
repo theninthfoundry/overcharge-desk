@@ -106,6 +106,7 @@ def init_db(db_path: Path | str = DEFAULT_LEDGER_DB) -> None:
 
 
 def compute_event_hash(
+    # Hash Chain Link: Computes SHA-256 digest incorporating sequence and previous event hash
     event_id: str,
     event_sequence: int,
     case_id: str,
