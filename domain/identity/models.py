@@ -79,6 +79,29 @@ class IdentityService:
                 seed_demo_accounts=True,
             )
 
+        # Ensure all standard demo accounts are present
+        demo_specs = [
+            ("owner", "owner@overcharge-desk.local", "Business Financial Owner", SystemRole.APPROVER, "owner123"),
+            ("operator", "sanya.m@overcharge-desk.local", "Sanya Malhotra (Finance Ops)", SystemRole.FINANCE_OPERATOR, "operator123"),
+            ("reviewer", "rohan.v@overcharge-desk.local", "Rohan Verma (Reviewer)", SystemRole.REVIEWER, "reviewer123"),
+            ("approver", "vikram.seth@overcharge-desk.local", "Vikram Seth (Approver)", SystemRole.APPROVER, "approver123"),
+            ("auditor", "pooja.h@overcharge-desk.local", "Pooja Hegde (Auditor)", SystemRole.AUDITOR, "auditor123"),
+            ("pay_operator", "karan.m@overcharge-desk.local", "Karan Mehra (Payment Ops)", SystemRole.PAYMENT_OPERATOR, "payment123"),
+        ]
+        for d_user, d_email, d_name, d_role, d_pw in demo_specs:
+            if not self.repo.get_user_by_username(d_user):
+                d_hash = hash_password(d_pw)
+                self.repo.create_user(
+                    user_id=f"USR-DEMO-{d_user.upper()}",
+                    username=d_user,
+                    email=d_email,
+                    full_name=d_name,
+                    role=d_role,
+                    password_hash=d_hash,
+                    is_active=True,
+                    is_demo=True,
+                )
+
     def authenticate(self, username: str, password: str) -> Optional[User]:
         """Authenticate user against Argon2id hash with rehash support."""
         if not username or not password:
