@@ -165,3 +165,5 @@ python tools/verify_ledger.py --strict
 - `cases/demo-overcharge/manifest.json`: Full 13-stage execution manifest for crash recovery and audit.
 - `case_audit/OC-20261106-01/audit_integrity_report.json`: Self-contained audit package manifest.
 - `ledger.db`: SQLite database storing the unbroken tamper-evident audit chain.
+- `identity.db`: Persistent SQLite store for users, Argon2id credentials, and hashed session tokens.
+- `GET /api/v1/health`: Operational readiness endpoint returning READY/DEGRADED across all subsystems.
