@@ -92,6 +92,7 @@ class IdentityRepository:
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);")
 
+            # Sessions table: Stores SHA-256 digests of bearer tokens to protect active sessions from DB leaks
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY,
