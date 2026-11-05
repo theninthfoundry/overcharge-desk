@@ -1,5 +1,6 @@
 {
   "case_id": "OC-20261106-01",
+  "vendor_id": "acme",
   "vendor_name_as_written": "Acme Supplies Pvt Ltd",
   "invoice_number": "INV-1103",
   "invoice_date": "2026-11-03",
@@ -28,5 +29,5 @@
   "source_file": "invoices/acme-inv-1103.txt",
   "source_sha256": "2c7d4c457e0b1d3f59092f997676589139738a89843c30da25824f1fbfe54543",
   "extraction_issues": [],
-  "extracted_at": "2026-11-06T09:00:00Z"
+  "extracted_at": "2026-11-05T10:52:40Z"
 }
