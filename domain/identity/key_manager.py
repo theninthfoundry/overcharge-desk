@@ -99,7 +99,7 @@ class KeyManager:
             else:
                 raise ToolError(f"FATAL: Active signing key file '{active_id}.key' does not exist on disk", 4)
 
-        # File permission checks in production on POSIX systems
+        # File permission checks in production on POSIX systems: reject group/world readable keys
         if self.app_env == "production" and os.name != "nt":
             mode = active_path.stat().st_mode
             if mode & (stat.S_IRWXG | stat.S_IRWXO):
