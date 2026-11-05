@@ -48,6 +48,9 @@ def build_receipt_body(
     currency: Optional[str] = None,
     reason: Optional[str] = None,
     created_at: Optional[str] = None,
+    verification_id: Optional[str] = None,
+    ledger_head_at_approval: Optional[str] = None,
+    signing_key_id: Optional[str] = None,
 ) -> dict:
     """Construct canonical approval receipt body prior to signing."""
     if not CASE_ID_RE.match(case_id):
@@ -95,6 +98,9 @@ def build_receipt_body(
         "receipt_version": RECEIPT_VERSION,
         "receipt_id": receipt_id,
         "case_id": case_id,
+        "verification_id": verification_id,
+        "ledger_head_at_approval": ledger_head_at_approval.lower() if ledger_head_at_approval else None,
+        "signing_key_id": signing_key_id or "default",
         "invoice_number": invoice_number,
         "invoice_sha256": invoice_sha256.lower(),
         "contract_id": contract_id,
@@ -143,6 +149,8 @@ def verify_approval_receipt(
     receipt: dict,
     key_bytes: bytes,
     expected_case_id: Optional[str] = None,
+    expected_verification_id: Optional[str] = None,
+    expected_compare_sha: Optional[str] = None,
 ) -> tuple[bool, list[str]]:
     """Strictly verify a cryptographic approval receipt.
 
@@ -151,7 +159,7 @@ def verify_approval_receipt(
       2. Full 64-char SHA-256 digest format on all hashes.
       3. Receipt hash parity against re-computed canonical JSON hash.
       4. HMAC-SHA-256 cryptographic signature against provisioned key.
-      5. Case ID match (if expected_case_id is provided).
+      5. Case ID, Verification ID, and Compare SHA match (if provided).
 
     Returns: `(is_valid, list_of_issues)`
     """
@@ -169,6 +177,16 @@ def verify_approval_receipt(
         issues.append(f"Invalid or missing case_id: {cid!r}")
     elif expected_case_id and cid != expected_case_id:
         issues.append(f"Case ID mismatch: expected {expected_case_id} but receipt is for {cid}")
+
+    if expected_verification_id and receipt.get("verification_id") != expected_verification_id:
+        issues.append(
+            f"Verification ID mismatch: expected {expected_verification_id} but receipt has {receipt.get('verification_id')}"
+        )
+
+    if expected_compare_sha and receipt.get("compare_sha256") != expected_compare_sha.lower():
+        issues.append(
+            f"Comparison digest mismatch: expected {expected_compare_sha.lower()} but receipt has {receipt.get('compare_sha256')}"
+        )
 
     # Check required fields
     for req in ("invoice_number", "contract_id", "actor_id", "actor_role", "decision", "created_at"):
