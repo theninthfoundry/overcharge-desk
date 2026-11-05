@@ -158,6 +158,7 @@ def check_actor_permission(
 
 
 def issue_actor_token(
+    # Authentication Protocol: Issues HMAC-SHA-256 token binding identity and timestamp
     actor_id: str,
     key_bytes: bytes,
     timestamp: Optional[int] = None,
@@ -289,3 +290,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     run_cli(main)
+
