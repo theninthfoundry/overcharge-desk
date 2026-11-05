@@ -104,7 +104,7 @@ class AuthorizationService:
                     f"Separation of duties violation: Operator '{approver.username}' cannot approve their own case",
                 )
 
-        # Rule 3: Verification State
+        # Rule 3: Verification State (Strict positive allowlist: only VERIFIED cases are approval-eligible)
         if verification_status and verification_status != "VERIFIED":
             return (
                 False,
