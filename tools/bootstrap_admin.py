@@ -30,6 +30,13 @@ def bootstrap_admin(
     db_path: Path | str = DEFAULT_IDENTITY_DB,
     seed_demo_accounts: bool = False,
 ) -> dict:
+    """Securely bootstrap the initial root administrator account.
+    
+    Security Controls:
+    - Never uses hardcoded default passwords in production.
+    - Requires interactive getpass input with confirmation if not passed explicitly.
+    - Refuses to run if an active administrator account already exists.
+    """
     repo = IdentityRepository(db_path=db_path)
 
     # 1. Check if an active administrator already exists
@@ -127,3 +134,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     run_cli(main)
+
