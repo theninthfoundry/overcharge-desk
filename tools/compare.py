@@ -52,6 +52,7 @@ def candidate_item_keys(description: str, rates: list) -> set:
 
 
 def rates_in_force(rates: list, item_key: str, on) -> list:
+    # Contract Rate Resolution: Date boundary filtering with open-ended effective_to support
     found = []
     for r in rates:
         if r.get("item_key") != item_key:
