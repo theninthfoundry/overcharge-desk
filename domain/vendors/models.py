@@ -42,7 +42,7 @@ DEFAULT_VENDOR_DESTINATIONS: Dict[str, VendorDestination] = {
 
 
 class VendorRegistry:
-    """Manages verified vendor payment destinations."""
+    """Manages verified vendor payment destinations and routing enforcement."""
 
     def __init__(self, destinations: Optional[Dict[str, VendorDestination]] = None):
         self._destinations = dict(destinations or DEFAULT_VENDOR_DESTINATIONS)
