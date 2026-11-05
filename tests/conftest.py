@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import shutil
 import sys
@@ -37,7 +39,7 @@ def make_invoice(lines, **over):
         "lines": lines,
         "stated_total": None,
         "source_file": "invoices/acme-inv-1103.txt",
-        "source_sha256": "22d395d2a0f513f2675d40725c63ff60b4a10e62fdb16dbb2d5110742ab7bea6",
+        "source_sha256": "2c7d4c457e0b1d3f59092f997676589139738a89843c30da25824f1fbfe54543",
         "extraction_issues": [],
     }
     inv.update(over)
