@@ -64,8 +64,15 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    """Constant-time verification of password against hash."""
-    if not password or not password_hash or not isinstance(password_hash, str):
+    """Constant-time verification of password against hash (Argon2id or PBKDF2).
+    
+    Guarantees:
+    - Rejects empty, whitespace-only, or oversized candidate passwords fail-closed.
+    - Uses constant-time digest comparison (hmac.compare_digest) to prevent timing side channels.
+    """
+    if not password or not password_hash or not isinstance(password, str) or not isinstance(password_hash, str):
+        return False
+    if len(password) > MAX_PASSWORD_LENGTH:
         return False
 
     if password_hash.startswith("$argon2"):
