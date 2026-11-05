@@ -1,0 +1,11 @@
+# Canonical Git attributes for deterministic binary digests across OS
+* text=auto eol=lf
+*.txt text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.csv text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.ini text eol=lf
