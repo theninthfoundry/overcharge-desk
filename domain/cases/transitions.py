@@ -9,6 +9,7 @@ from common import ToolError, load_json, utc_now_iso, write_json_atomic
 
 
 class CaseState:
+    """Explicit lifecycle states for vendor overcharge cases."""
     CREATED = "CREATED"
     RECONCILIATION_RUNNING = "RECONCILIATION_RUNNING"
     VERIFIED = "VERIFIED"
@@ -22,6 +23,7 @@ class CaseState:
     CLOSED = "CLOSED"
 
 
+# Closed state transition graph enforcing strictly legal forward progression
 LEGAL_STATE_TRANSITIONS: Dict[str, Set[str]] = {
     CaseState.CREATED: {
         CaseState.RECONCILIATION_RUNNING,
@@ -139,3 +141,4 @@ class CaseLifecycleManager:
 
         write_json_atomic(p, data)
         return data
+
