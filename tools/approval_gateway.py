@@ -100,16 +100,16 @@ def process_approval_decision(
 
     # 4. Verify registered evidence files on disk
     reg_path = c_dir / "evidence_registry.json"
-    if reg_path.exists():
-        ev_verify = verify_evidence(c_dir)
-        if not ev_verify["ok"]:
-            raise ToolError(
-                f"Authorization refused: Evidence integrity check failed on disk: {ev_verify['failures']}",
-                2,
-            )
-        evidence_digests = get_evidence_digest_map(c_dir)
-    else:
-        evidence_digests = {}
+    if not reg_path.exists():
+        raise ToolError(f"Authorization refused: Missing evidence_registry.json in case directory {c_dir}", 2)
+
+    ev_verify = verify_evidence(c_dir)
+    if not ev_verify["ok"]:
+        raise ToolError(
+            f"Authorization refused: Evidence integrity check failed on disk: {ev_verify['failures']}",
+            2,
+        )
+    evidence_digests = get_evidence_digest_map(c_dir)
 
     v_status = comp_data.get("verification_status")
     case_id = comp_data.get("case_id") or c_dir.name
@@ -130,40 +130,98 @@ def process_approval_decision(
     calc_withheld_str: Optional[str] = None
 
     if decision == "APPROVED":
-        # Fail-closed: Never approve a BLOCKED audit
-        # Invariant Rule 1.4: Refuses approval on arithmetic discrepancies or hash mismatches
-        if v_status == STATE_BLOCKED:
-            blocking = comp_data.get("blocking_issues", [])
+        # Strict Positive Allowlist: Only STATE_VERIFIED can be approved
+        # Invariant Rule 1.4: Refuses approval on arithmetic discrepancies, review-required or blocked states
+        if v_status != STATE_VERIFIED:
+            if v_status == STATE_BLOCKED:
+                blocking = comp_data.get("blocking_issues", [])
+                raise ToolError(
+                    f"Authorization refused: Cannot approve BLOCKED audit. Blocking issues: {'; '.join(blocking)}",
+                    4,
+                )
             raise ToolError(
-                f"Authorization refused: Cannot approve BLOCKED audit. Blocking issues: {'; '.join(blocking)}",
+                f"Authorization refused: Cannot approve audit with verification_status {v_status!r} (must be VERIFIED)",
                 4,
             )
 
         # For VERIFIED audits: compute exact payable goods total
-        if v_status == STATE_VERIFIED:
-            totals = comp_data.get("totals", {})
-            calc_payable = to_decimal(totals.get("matched_per_contract", "0"))
-            calc_withheld = to_decimal(totals.get("variance_on_matched_lines", "0"))
-            calc_payable_str = money_str(calc_payable)
-            calc_withheld_str = money_str(calc_withheld)
+        totals = comp_data.get("totals", {})
+        calc_payable = to_decimal(totals.get("matched_per_contract", "0"))
+        calc_withheld = to_decimal(totals.get("variance_on_matched_lines", "0"))
+        calc_payable_str = money_str(calc_payable)
+        calc_withheld_str = money_str(calc_withheld)
 
-            # If caller supplied amount, it must match exact payable amount
-            if approved_amount is not None:
-                given_d = q2(to_decimal(approved_amount))
-                if given_d != calc_payable:
-                    raise ToolError(
-                        f"Authorization refused: Approved amount mismatch: given {money_str(given_d)} != "
-                        f"calculated payable amount {calc_payable_str}",
-                        4,
-                    )
-            else:
-                approved_amount = calc_payable_str
+        # If caller supplied amount, it must match exact payable amount
+        if approved_amount is not None:
+            given_d = q2(to_decimal(approved_amount))
+            if given_d != calc_payable:
+                raise ToolError(
+                    f"Authorization refused: Approved amount mismatch: given {money_str(given_d)} != "
+                    f"calculated payable amount {calc_payable_str}",
+                    4,
+                )
+        else:
+            approved_amount = calc_payable_str
 
     elif decision == "REJECTED":
         if not reason or not reason.strip():
             raise ToolError("Authorization refused: Rejection requires an explicit reason", 2)
 
-    # 6. Construct and Sign Approval Receipt
+    # 6. Idempotency Check: Return existing valid receipt if identical request
+    approvals_dir = c_dir / "approvals"
+    receipt_path = approvals_dir / "approval_receipt.json"
+    if receipt_path.exists():
+        try:
+            existing_receipt = load_json(receipt_path)
+            existing_valid, _ = verify_approval_receipt(existing_receipt, key_bytes, expected_case_id=case_id)
+            if (
+                existing_valid
+                and existing_receipt.get("decision") == decision
+                and existing_receipt.get("actor_id") == actor_id
+                and (approved_amount is None or existing_receipt.get("approved_amount") == approved_amount)
+            ):
+                return {
+                    "ok": True,
+                    "action": f"case_{decision.lower()}",
+                    "decision": decision,
+                    "actor_id": actor_id,
+                    "actor_role": actor_role,
+                    "receipt_id": existing_receipt["receipt_id"],
+                    "receipt_file": str(receipt_path),
+                    "receipt_hash": existing_receipt["receipt_hash"],
+                    "receipt_signature": existing_receipt["receipt_signature"],
+                    "approved_amount": existing_receipt.get("approved_amount"),
+                    "withheld_amount": existing_receipt.get("withheld_amount"),
+                    "currency": existing_receipt.get("currency"),
+                    "idempotent": True,
+                }
+        except Exception:
+            pass
+
+    # Read verification_id if present
+    verification_id = None
+    for cand in (c_dir / "audit" / "verification.json", c_dir / "verification.json"):
+        if cand.exists():
+            try:
+                verification_id = load_json(cand).get("verification_id")
+                break
+            except Exception:
+                pass
+
+    # Read ledger head if present
+    ledger_head = None
+    for l_cand in (c_dir / "ledger.db", Path("ledger.db")):
+        if l_cand.exists():
+            try:
+                from audit_ledger import list_events
+                evs = list_events(db_path=l_cand)
+                if evs:
+                    ledger_head = evs[-1]["event_hash"]
+                break
+            except Exception:
+                pass
+
+    # 7. Construct and Sign Approval Receipt
     receipt_body = build_receipt_body(
         case_id=case_id,
         invoice_number=inv_num,
@@ -178,41 +236,36 @@ def process_approval_decision(
         withheld_amount=calc_withheld_str,
         currency=currency,
         reason=reason,
+        verification_id=verification_id,
+        ledger_head_at_approval=ledger_head,
     )
 
     signed_receipt = sign_receipt(receipt_body, key_bytes)
 
-    # 7. Save Receipt to Case directory
-    approvals_dir = c_dir / "approvals"
+    # 8. Save Receipt to Case directory
     approvals_dir.mkdir(parents=True, exist_ok=True)
-    receipt_path = approvals_dir / "approval_receipt.json"
     save_approval_receipt(signed_receipt, receipt_path)
 
-    # 8. Register Receipt in Evidence Registry
-    if reg_path.exists():
-        register_evidence(
-            c_dir,
-            receipt_path,
-            evidence_type="approval_receipt",
-            case_id=case_id,
-            description=f"{decision} decision receipt signed by {actor_id}",
-        )
+    # 9. Register Receipt in Evidence Registry
+    register_evidence(
+        c_dir,
+        receipt_path,
+        evidence_type="approval_receipt",
+        case_id=case_id,
+        description=f"{decision} decision receipt signed by {actor_id}",
+    )
 
-    # 9. Update case lifecycle state if case.json exists
+    # 10. Update case lifecycle state transactionally if case.json exists
     case_meta_path = c_dir / "case.json"
     if case_meta_path.exists():
-        try:
-            target_state = CASE_STATE_APPROVED if decision == "APPROVED" else CASE_STATE_REJECTED
-            transition_case_state(
-                case_id=case_id,
-                new_state=target_state,
-                cases_dir=c_dir.parent,
-                reason=reason or f"Case {decision} by {actor_id}",
-                actor_id=actor_id,
-            )
-        except Exception:
-            # Case state transition is best-effort for existing flat case dirs
-            pass
+        target_state = CASE_STATE_APPROVED if decision == "APPROVED" else CASE_STATE_REJECTED
+        transition_case_state(
+            case_id=case_id,
+            new_state=target_state,
+            cases_dir=c_dir.parent,
+            reason=reason or f"Case {decision} by {actor_id}",
+            actor_id=actor_id,
+        )
 
     return {
         "ok": True,
