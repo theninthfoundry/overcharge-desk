@@ -33,6 +33,7 @@ DECISIONS = ("APPROVED", "REJECTED")
 
 
 def build_receipt_body(
+    # Invariant Rule 3.3: Cryptographically binds full 64-char SHA-256 digests of all evidence
     case_id: str,
     invoice_number: str,
     invoice_sha256: str,
@@ -248,3 +249,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     run_cli(main)
+
