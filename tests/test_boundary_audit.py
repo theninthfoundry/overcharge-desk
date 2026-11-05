@@ -46,6 +46,7 @@ from pipeline import run_pipeline
 # 1. Blocked result override attempt (Fail-Closed)
 # ---------------------------------------------------------------------------
 def test_blocked_result_override_rejected(vendor, mk):
+    # Boundary Test: Verifies complete removal of --allow-blocked-draft bypass
     make_invoice, carton, _ = mk
     inv = make_invoice([carton(500, "112.00", total="57000.00")])
     r = compare(inv, vendor)
