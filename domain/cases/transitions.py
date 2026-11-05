@@ -74,7 +74,7 @@ LEGAL_STATE_TRANSITIONS: Dict[str, Set[str]] = {
 
 
 class ConcurrencyConflictError(ToolError):
-    """Raised when an optimistic concurrency version check fails."""
+    """Raised when an optimistic concurrency version check fails (HTTP 409)."""
     def __init__(self, message: str):
         super().__init__(f"Concurrency conflict: {message}", 409)
 
