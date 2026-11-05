@@ -71,6 +71,18 @@ The enterprise production architecture establishes 6 distinct roles:
 
 ---
 
+## 2.4 Process Boundaries, Key Isolation & Human Authorization Gates
+
+| Threat | Control | Enforcing Mechanism |
+|---|---|---|
+| AI Agent autonomous payment self-approval | Unified agent CLI `tools/desk.py` strictly omits an `approve` subcommand. | Argument parser error; command does not exist. |
+| Agent forging approval via piped subshell | `tools/approve.py` requires an interactive TTY session (`sys.stdin.isatty()`). | Immediate fail-closed abort (exit code 4) on pipes or headless calls. |
+| Forged human approval token | Interactive password prompt verified against Argon2id SQLite identity store. | `IdentityService.authenticate()` via `tools/approve.py`. |
+| Single OS user credential snooping | Signing keys provisioned outside repo tree via `OVERCHARGE_KEY_DIR` / `OVERCHARGE_SIGNING_KEY`. | `auth.py:get_default_key_dir()` defaults to `~/.overcharge/keys/`. |
+| Unauthenticated CLI token issuance | `tools/auth.py issue-token` strictly locked down; fails closed without explicit `--dev`. | `auth.py` CLI handler exits code 4 without `--dev`. |
+
+---
+
 ## 3. Honest Trust & Immutability Disclosures
 
 1. **What HMAC-SHA-256 Signatures Prove and Do Not Prove**:
@@ -83,3 +95,6 @@ The enterprise production architecture establishes 6 distinct roles:
 3. **Distinction Between Payment Recommendation and Payment Execution**:
    - Overcharge Desk produces verified, authorized payment recommendation sheets (`corrected_payment.csv`).
    - It does **not** execute automated disbursements or direct bank transfers. Actual payment execution remains within external corporate banking systems.
+4. **Same OS User Process Boundaries vs Container Isolation**:
+   - When multiple agents execute under the same OS user process on a single workstation, they share operating system filesystem access. True enterprise multi-tenancy requires OS user boundaries or containerized sandboxes per agent.
+   - To enforce strong separation of concerns, signing keys are provisioned outside the repository tree via `OVERCHARGE_KEY_DIR` / `OVERCHARGE_SIGNING_KEY`, agent token minting via `tools/auth.py issue-token` is locked down with fail-closed errors, and `tools/desk.py` contains no `approve` subcommand.
