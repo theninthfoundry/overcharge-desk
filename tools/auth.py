@@ -37,6 +37,7 @@ DEFAULT_TOKEN_TTL = 300  # 5 minutes
 ROLES = ("SYSTEM", "REVIEWER", "APPROVER", "ADMINISTRATOR")
 
 ROLE_PERMISSIONS: Dict[str, List[str]] = {
+    # Role-Based Access Control: Granular capability mapping for SYSTEM, REVIEWER, APPROVER, ADMIN
     "SYSTEM": [
         "register_evidence",
         "validate_invoice",
