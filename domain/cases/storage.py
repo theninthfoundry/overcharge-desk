@@ -43,7 +43,13 @@ class CaseStorage:
         self.cases_dir.mkdir(parents=True, exist_ok=True)
 
     def validate_case_id(self, case_id: str) -> str:
-        """Validate case identifier format and prevent path manipulation characters."""
+        """Validate case identifier format and prevent path manipulation characters.
+        
+        Defense Rules:
+        - Alphanumeric, hyphens, underscores only (3-64 chars via regex).
+        - Explicitly blocks path separators (/, \\), parent directory references (..),
+          colons (:), URL encoded dots (%2e), and null bytes (\\0).
+        """
         if not case_id or not isinstance(case_id, str):
             raise StorageSecurityError("Case identifier must be a non-empty string")
         clean_id = case_id.strip()
