@@ -1,12 +1,18 @@
 PY ?= python3
 
-.PHONY: test reset-demo check
+.PHONY: test reset-demo check demo verify-ledger
 
 test:
-	$(PY) -m pytest -q
+	$(PY) -m pytest -v
 
 check: test
 	@echo "Tools OK. Now run the Day-1 checks in DEMO_SCRIPT.md."
+
+demo:
+	$(PY) tools/run_demo_suite.py --clean
+
+verify-ledger:
+	$(PY) tools/audit_ledger.py verify
 
 # Restores the clean demo state. Deletes every cases/OC-* folder. Use only before a rehearsal or recording.
 reset-demo:
