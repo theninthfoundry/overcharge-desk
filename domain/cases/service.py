@@ -2,24 +2,37 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from common import ToolError, load_json, utc_now_iso, write_json_atomic
-from domain.authorization.policies import AuthorizationService, PERM_CASE_APPROVE, PERM_CASE_CREATE, PERM_CASE_RECONCILE
+from domain.authorization.policies import (
+    AuthorizationService,
+    PERM_CASE_APPROVE,
+    PERM_CASE_CREATE,
+    PERM_CASE_READ,
+    PERM_CASE_RECONCILE,
+    PERM_PAYMENT_EXPORT,
+)
 from domain.cases.models import CaseDetail, CaseSummary
+from domain.cases.storage import CaseStorage, StorageSecurityError
+from domain.cases.transitions import CaseLifecycleManager, CaseState
+from domain.identity.key_manager import KeyManager
 from domain.identity.models import User
+from domain.payments.models import PaymentInstruction
+from domain.payments.service import PaymentService
 from state_model import ApprovalStatus, CommercialStatus, PaymentRecommendationStatus, VerificationStatus
 
 # Import directly from existing Python engine in tools/
 from approval_gateway import process_approval_decision
-from auth import issue_actor_token, load_actors_config, load_signing_key
+from auth import issue_actor_token, load_actors_config
 from export_audit_package import export_case_audit, verify_package_integrity
 from pipeline import run_pipeline
 
 
 class CaseService:
-    """Orchestrates case management, reconciliation, and authorization."""
+    """Orchestrates case management, reconciliation, authorization, and payment release."""
 
     def __init__(
         self,
@@ -30,16 +43,16 @@ class CaseService:
     ):
         self.base_dir = Path(base_dir)
         self.cases_dir = Path(cases_dir) if cases_dir else self.base_dir / "cases"
-        self.cases_dir.mkdir(parents=True, exist_ok=True)
+        self.storage = CaseStorage(self.cases_dir)
         self.auth_service = auth_service or AuthorizationService(enforce_strict_separation_of_duties=True)
+        self.key_manager = KeyManager(config_dir=self.base_dir / "config")
         self.key_file = Path(key_file) if key_file else self.base_dir / "config" / "signing.key"
         self.actors_cfg_file = self.base_dir / "config" / "actors.json"
+        self.payment_service = PaymentService(auth_service=self.auth_service)
 
     def _get_signing_key(self) -> bytes:
-        if self.key_file.exists():
-            return load_signing_key(self.key_file)
-        # Default fallback key
-        return b"0123456789abcdef0123456789abcdef"
+        active_id, key_bytes = self.key_manager.get_active_key()
+        return key_bytes
 
     def list_cases(self, filter_status: Optional[str] = None) -> List[CaseSummary]:
         """Scan case directories and return summaries."""
@@ -84,29 +97,31 @@ class CaseService:
     ) -> CaseDetail:
         """Create a new case directory and initialize invoice."""
         self.auth_service.require_permission(creator_user, PERM_CASE_CREATE)
-        c_dir = self.cases_dir / case_id
+        clean_id = self.storage.validate_case_id(case_id)
+        c_dir = self.storage.get_case_directory(clean_id, create=False)
         if c_dir.exists():
-            raise ToolError(f"Case '{case_id}' already exists", 2)
-        c_dir.mkdir(parents=True, exist_ok=True)
+            raise ToolError(f"Case '{clean_id}' already exists", 2)
+        c_dir = self.storage.get_case_directory(clean_id, create=True)
 
         # Write invoice.json
-        invoice_json_content["case_id"] = case_id
+        invoice_json_content["case_id"] = clean_id
         invoice_json_content["vendor_id"] = vendor_id
         inv_path = c_dir / "invoice.json"
         write_json_atomic(inv_path, invoice_json_content)
 
-        # Write initial case.json metadata
+        # Write initial case.json metadata with version tracking
         now = utc_now_iso()
         case_meta = {
-            "case_id": case_id,
+            "case_id": clean_id,
             "vendor_id": vendor_id,
             "created_by": creator_user.username,
             "created_at": now,
-            "current_state": "CREATED",
+            "current_state": CaseState.CREATED,
+            "version": 1,
             "state_history": [
                 {
                     "from_state": None,
-                    "to_state": "CREATED",
+                    "to_state": CaseState.CREATED,
                     "reason": f"Case created by {creator_user.username}",
                     "actor_id": creator_user.username,
                     "timestamp": now,
@@ -131,10 +146,22 @@ class CaseService:
         vendor_id = inv_data.get("vendor_id", "acme")
         vendor_file = self.base_dir / "vendors" / f"{vendor_id}.json"
         if not vendor_file.exists():
-            # Fallback to acme.json if specific vendor file not present
             vendor_file = self.base_dir / "vendors" / "acme.json"
 
-        # Execute existing pipeline
+        # Record running state transition if case.json exists
+        case_meta_p = c_dir / "case.json"
+        if case_meta_p.exists():
+            try:
+                CaseLifecycleManager.transition(
+                    case_file=case_meta_p,
+                    to_state=CaseState.RECONCILIATION_RUNNING,
+                    actor_id=operator.username,
+                    reason="Reconciliation pipeline started",
+                )
+            except Exception:
+                pass
+
+        # Execute existing deterministic pipeline
         res = run_pipeline(
             invoice_path=inv_file,
             vendor_path=vendor_file,
@@ -143,6 +170,28 @@ class CaseService:
             require_approval=require_approval,
             record_ledger_events=True,
         )
+
+        # Transition lifecycle state based on pipeline verification outcome
+        if case_meta_p.exists():
+            v_status = res.get("verification_status")
+            if v_status == VerificationStatus.VERIFIED:
+                next_state = CaseState.AWAITING_APPROVAL if require_approval else CaseState.VERIFIED
+            elif v_status == VerificationStatus.BLOCKED:
+                next_state = CaseState.BLOCKED
+            else:
+                next_state = CaseState.REVIEW_REQUIRED
+
+            try:
+                CaseLifecycleManager.transition(
+                    case_file=case_meta_p,
+                    to_state=next_state,
+                    actor_id=operator.username,
+                    reason=f"Reconciliation completed: {v_status}",
+                    evidence_version=res.get("comparison_digest"),
+                )
+            except Exception:
+                pass
+
         return res
 
     def approve_or_reject_case(
@@ -164,11 +213,15 @@ class CaseService:
         if case_meta_p.exists():
             case_creator = load_json(case_meta_p).get("created_by") or case_creator
 
-        # 2. Fetch verification status
+        # 2. Fetch verification status and calculate payable amount independently
         comp_file = c_dir / "compare.json"
         v_status = None
+        calculated_payable: Optional[str] = None
         if comp_file.exists():
-            v_status = load_json(comp_file).get("verification_status")
+            comp_data = load_json(comp_file)
+            v_status = comp_data.get("verification_status")
+            totals = comp_data.get("totals", {})
+            calculated_payable = totals.get("matched_per_contract")
 
         # 3. Server-side policy evaluation (Separation of duties & Allowlist)
         if decision == "APPROVED":
@@ -179,6 +232,19 @@ class CaseService:
             )
             if not eligible:
                 raise ToolError(f"Authorization denied: {err_msg}", 4)
+
+            if not calculated_payable:
+                raise ToolError("Cannot approve case without calculated payable amount in comparison", 4)
+
+            # Invariant: Caller cannot dictate amount. If supplied, must exactly match server calculated amount.
+            if amount is not None:
+                if Decimal(str(amount)) != Decimal(str(calculated_payable)):
+                    raise ToolError(
+                        f"Supplied amount '{amount}' does not match server-calculated payable amount '{calculated_payable}'",
+                        4,
+                    )
+            # Authoritative amount comes strictly from server calculation
+            amount = calculated_payable
 
         # 4. Issue temporary actor token for gateway execution
         key_bytes = self._get_signing_key()
@@ -195,7 +261,85 @@ class CaseService:
             key_file=self.key_file,
             config_file=self.actors_cfg_file if self.actors_cfg_file.exists() else None,
         )
+
+        # 6. Record state transition in lifecycle manager
+        if case_meta_p.exists():
+            target_state = CaseState.APPROVED if decision == "APPROVED" else CaseState.REJECTED
+            try:
+                CaseLifecycleManager.transition(
+                    case_file=case_meta_p,
+                    to_state=target_state,
+                    actor_id=approver.username,
+                    reason=reason or f"Case human decision: {decision}",
+                    event_id=res.get("receipt_id"),
+                )
+            except Exception:
+                pass
+
         return res
+
+    def create_payment_instruction(
+        self,
+        case_id: str,
+        operator: User,
+        idempotency_key: Optional[str] = None,
+    ) -> PaymentInstruction:
+        """Generate an authorized payment instruction for an approved case."""
+        c_dir = self._resolve_case_dir(case_id)
+        if not c_dir or not c_dir.exists():
+            raise ToolError(f"Case '{case_id}' not found", 2)
+
+        inst = self.payment_service.create_instruction_from_case(
+            case_dir=c_dir,
+            user=operator,
+            idempotency_key=idempotency_key,
+        )
+
+        case_meta_p = c_dir / "case.json"
+        if case_meta_p.exists():
+            try:
+                CaseLifecycleManager.transition(
+                    case_file=case_meta_p,
+                    to_state=CaseState.PAYMENT_INSTRUCTION_READY,
+                    actor_id=operator.username,
+                    reason=f"Payment instruction created: {inst.instruction_id}",
+                    event_id=inst.instruction_id,
+                )
+            except Exception:
+                pass
+
+        return inst
+
+    def export_payment_instruction(
+        self,
+        case_id: str,
+        instruction_id: str,
+        operator: User,
+        format_type: str = "csv",
+    ) -> Tuple[str, bytes]:
+        """Export payment instruction safely in CSV or JSON format."""
+        c_dir = self._resolve_case_dir(case_id)
+        media_type, content = self.payment_service.export_instruction(
+            instruction_id=instruction_id,
+            user=operator,
+            format_type=format_type,
+        )
+
+        if c_dir and c_dir.exists():
+            case_meta_p = c_dir / "case.json"
+            if case_meta_p.exists():
+                try:
+                    CaseLifecycleManager.transition(
+                        case_file=case_meta_p,
+                        to_state=CaseState.EXPORTED,
+                        actor_id=operator.username,
+                        reason=f"Payment instruction exported as {format_type.upper()}",
+                        event_id=instruction_id,
+                    )
+                except Exception:
+                    pass
+
+        return media_type, content
 
     def export_audit_package(self, case_id: str) -> Dict[str, Any]:
         """Export and verify standalone case audit package."""
@@ -211,50 +355,40 @@ class CaseService:
         return export_res
 
     def get_artifact_path(self, case_id: str, artifact_name: str) -> Optional[Path]:
-        """Safely resolve an artifact path within a case directory."""
-        c_dir = self._resolve_case_dir(case_id)
-        if not c_dir or not c_dir.exists():
+        """Safely resolve an artifact path within a case directory using storage boundaries."""
+        try:
+            return self.storage.resolve_artifact_path(case_id, artifact_name)
+        except (StorageSecurityError, ToolError):
             return None
-
-        # Safe permitted artifact names
-        permitted = {
-            "payment_preview.csv": c_dir / "payment_preview.csv",
-            "corrected_payment.csv": c_dir / "corrected_payment.csv",
-            "partial_review.csv": c_dir / "partial_review.csv",
-            "blocked_review_report.csv": c_dir / "blocked_review_report.csv",
-            "compare.json": c_dir / "compare.json",
-            "verification.json": c_dir / "audit" / "verification.json",
-            "manifest.json": c_dir / "manifest.json",
-            "approval_receipt.json": c_dir / "approvals" / "approval_receipt.json",
-            "evidence_registry.json": c_dir / "evidence_registry.json",
-        }
-        cand = permitted.get(artifact_name)
-        if cand and cand.exists():
-            return cand
-        return None
 
     def _resolve_case_dir(self, case_id: str) -> Optional[Path]:
         """Resolve case folder by exact name or matching case.json case_id."""
-        exact = self.cases_dir / case_id
-        if exact.exists() and exact.is_dir():
-            return exact
+        try:
+            clean_id = self.storage.validate_case_id(case_id)
+            exact = self.cases_dir / clean_id
+            if exact.exists() and exact.is_dir():
+                return exact
+        except Exception:
+            pass
+
         # Search inside subdirectories
-        for entry in self.cases_dir.iterdir():
-            if entry.is_dir():
-                meta_p = entry / "case.json"
-                if meta_p.exists():
-                    try:
-                        if load_json(meta_p).get("case_id") == case_id:
-                            return entry
-                    except Exception:
-                        pass
-                inv_p = entry / "invoice.json"
-                if inv_p.exists():
-                    try:
-                        if load_json(inv_p).get("case_id") == case_id:
-                            return entry
-                    except Exception:
-                        pass
+        if self.cases_dir.exists():
+            for entry in self.cases_dir.iterdir():
+                if entry.is_dir() and not entry.name.startswith("."):
+                    meta_p = entry / "case.json"
+                    if meta_p.exists():
+                        try:
+                            if load_json(meta_p).get("case_id") == case_id:
+                                return entry
+                        except Exception:
+                            pass
+                    inv_p = entry / "invoice.json"
+                    if inv_p.exists():
+                        try:
+                            if load_json(inv_p).get("case_id") == case_id:
+                                return entry
+                        except Exception:
+                            pass
         return None
 
     def _summarize_case_dir(self, c_dir: Path) -> Optional[CaseSummary]:

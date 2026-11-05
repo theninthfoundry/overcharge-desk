@@ -32,3 +32,4 @@ __all__ = [
     "ROLE_PERMISSIONS",
     "AuthorizationService",
 ]
+

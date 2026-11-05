@@ -112,3 +112,4 @@ class AuthorizationService:
             )
 
         return True, "Approval authorized under current governance policy"
+
