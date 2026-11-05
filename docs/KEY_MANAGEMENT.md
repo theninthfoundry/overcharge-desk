@@ -45,9 +45,14 @@ stateDiagram-v2
 
 ## 3. Storage & Permission Invariants
 
-### 3.1 Key Storage Architecture
-- Keys reside in `config/` named by key identifier: `config/<key_id>.key`.
-- Metadata is tracked in `config/keys_manifest.json`:
+### 3.1 Key Storage Architecture & Isolation
+- To isolate cryptographic authority from autonomous AI agents that operate inside the repository clone, signing keys and manifests reside **outside the repository directory tree**.
+- **Configuration**:
+  - `OVERCHARGE_KEY_DIR`: Custom path to key directory (defaults to `~/.overcharge/keys/`).
+  - `OVERCHARGE_SIGNING_KEY`: Optional explicit path to the active `signing.key` file.
+  - Automated tests and CI pipelines run against isolated temporary directories (`tmp_path_factory.mktemp("test_keys")`).
+- Keys are named by key identifier: `<key_dir>/<key_id>.key`.
+- Metadata is tracked in `<key_dir>/keys_manifest.json`:
 ```json
 {
   "active_key_id": "key-20261105-a8f2",
