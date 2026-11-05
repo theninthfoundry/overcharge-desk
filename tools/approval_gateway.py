@@ -40,6 +40,7 @@ from case_manager import (CASE_STATE_APPROVAL_PENDING, CASE_STATE_APPROVED,
 
 
 def process_approval_decision(
+    # Authorization Gateway: Orchestrates actor authentication, evidence checks, and receipt signing
     case_dir: Path | str,
     actor_token: str,
     decision: str,
