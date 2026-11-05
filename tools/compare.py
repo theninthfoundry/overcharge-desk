@@ -336,19 +336,29 @@ def compare(invoice: dict, vendor: dict, base_dir: Path | str | None = None) -> 
         verification_status = STATE_BLOCKED
         if source_discrepancy_count > 0:
             settlement_status = "PAYMENT_RECOMMENDATION_BLOCKED: SOURCE_DISCREPANCY"
+            commercial_status = "DISCREPANCY"
         else:
             settlement_status = "PAYMENT_RECOMMENDATION_BLOCKED: INTEGRITY_ERRORS"
+            commercial_status = "DISCREPANCY" if not stated_ok else "UNDETERMINED"
     elif unmatched_count > 0 or not complete:
         verification_status = STATE_REVIEW_REQUIRED
         settlement_status = "PAYMENT_RECOMMENDATION_PARTIAL: UNRESOLVED_LINES"
+        commercial_status = "UNSUPPORTED_CHARGES" if unmatched_count > 0 else "AMBIGUOUS"
     else:
         verification_status = STATE_VERIFIED
         settlement_status = "GOODS_SUBTOTAL_RECONCILED: TAX_AND_FREIGHT_UNVERIFIED"
+        if verified_overcharge > ZERO:
+            commercial_status = "OVERCHARGED"
+        elif verified_undercharge > ZERO:
+            commercial_status = "UNDERCHARGED"
+        else:
+            commercial_status = "COMPLIANT"
 
     return {
         "ok": True,
         "schema_version": SCHEMA_VERSION,
         "verification_status": verification_status,
+        "commercial_status": commercial_status,
         "settlement_status": settlement_status,
         "case_id": invoice.get("case_id"),
         "vendor_id": vendor.get("vendor_id"),
