@@ -68,3 +68,25 @@ def test_session_lifecycle_and_touch(tmp_path):
     updated = repo.get_session_by_token_hash("hash_01")
     assert updated is not None
     assert updated.session_id == sess.session_id
+
+
+def test_session_revocation(tmp_path):
+    repo = IdentityRepository(db_path=tmp_path / "test_identity.db")
+    u = repo.create_user(
+        user_id="U2",
+        username="revoke_user",
+        email="revoke@test.local",
+        full_name="Revoke User",
+        role="OPERATOR",
+        password_hash="hash",
+    )
+    sess = repo.create_session("SESS-02", "U2", "hash_02", "2099-01-01T00:00:00Z")
+    assert sess.is_valid is True
+
+    # Revoke session
+    repo.revoke_session("SESS-02")
+    revoked = repo.get_session_by_token_hash("hash_02")
+    assert revoked is not None
+    assert revoked.revoked_at is not None
+    assert revoked.is_valid is False
+
