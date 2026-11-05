@@ -139,6 +139,7 @@ def sign_receipt(receipt_body: dict, key_bytes: bytes) -> dict:
 
 
 def verify_approval_receipt(
+    # Fail-Closed Verification: Validates digest integrity, case binding, and HMAC signature
     receipt: dict,
     key_bytes: bytes,
     expected_case_id: Optional[str] = None,
