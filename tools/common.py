@@ -65,6 +65,8 @@ def write_json_atomic(path, data) -> None:
 
 
 def to_decimal(value, what: str = "value") -> Decimal:
+    # Invariant Rule 1.1: Exact Decimal arithmetic enforced across all modules
+    # Rejects float inputs, booleans, and non-finite numbers
     """Exact decimal from a JSON number or numeric string. Never uses float math."""
     if value is None or isinstance(value, bool):
         raise ToolError(f"{what} is missing or not a number")
