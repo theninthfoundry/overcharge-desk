@@ -61,6 +61,7 @@ ALL_CASE_STATES = {
 
 # Permitted state transitions
 LEGAL_TRANSITIONS: Dict[str, Set[str]] = {
+    # Formal State Machine: Enforces non-bypassable case lifecycle transitions
     CASE_STATE_CREATED: {CASE_STATE_INTAKE_VERIFIED, CASE_STATE_BLOCKED},
     CASE_STATE_INTAKE_VERIFIED: {
         CASE_STATE_COMPARED,
