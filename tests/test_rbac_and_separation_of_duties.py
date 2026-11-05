@@ -115,3 +115,20 @@ def test_token_expiration_and_tampering(identity_service):
     identity_service.revoke_token(token)
     assert identity_service.verify_session_token(token) is None
 
+
+def test_caller_supplied_amount_mismatch_fails(identity_service):
+    """Caller cannot override server-calculated payable amount."""
+    approver = identity_service.get_user_by_username("approver")
+    token = identity_service.issue_session_token(approver)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Case demo-overcharge has calculated payable amount 60000.00
+    res = client.post(
+        "/api/v1/cases/demo-overcharge/approve",
+        headers=headers,
+        json={"decision": "APPROVED", "amount": "99999.00"},
+    )
+    assert res.status_code in (400, 403)
+    assert "does not match server-calculated payable amount" in res.json()["detail"]
+
+
