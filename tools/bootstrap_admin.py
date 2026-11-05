@@ -77,6 +77,7 @@ def bootstrap_admin(
     seeded = []
     if seed_demo_accounts:
         # Explicit development-only demo seed
+        # Demo accounts are strictly isolated and flagged is_demo=True to block production startup
         demo_specs = [
             ("operator", "sanya.m@overcharge-desk.local", "Sanya Malhotra (Finance Ops)", SystemRole.FINANCE_OPERATOR, "operator123"),
             ("reviewer", "rohan.v@overcharge-desk.local", "Rohan Verma (Reviewer)", SystemRole.REVIEWER, "reviewer123"),
