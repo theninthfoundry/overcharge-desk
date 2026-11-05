@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.0] - 2026-11-05
+
+### Added
+- **Unified Agent CLI (`tools/desk.py`)**:
+  - Deterministic agent interface providing `intake`, `audit`, `status`, `history`, and `finalize` subcommands.
+  - Strict architectural omission of any `approve` subcommand; AI agents cannot authorize financial payments under any prompt or circumstance.
+  - `history --vendor <vendor_id>` query mode returning historical cases, invoice dates, outcomes, and withheld variances to support the vendor memory moment in Switch rooms.
+  - Emits full 64-character SHA-256 digests for `invoice_sha256`, `compare_sha256`, `verification_id`, and `ledger_head`.
+- **Interactive Terminal Owner Approval CLI (`tools/approve.py`)**:
+  - Out-of-band human authorization requiring an interactive TTY session (`sys.stdin.isatty()`); headless agents, pipes, and automated subshells are strictly refused.
+  - Prompts securely for owner credentials using `getpass`, verifying against `IdentityRepository` with memory-hard Argon2id.
+  - Computes exact payable amounts server-side from `compare.json`.
+  - Produces full 64-character SHA-256 cryptographic receipt hash formatted for posting to the Switch room.
+- **External Key Isolation Architecture**:
+  - Signing keys and manifests reside strictly outside the repository tree via `OVERCHARGE_KEY_DIR` (defaulting to `~/.overcharge/keys/`) or `OVERCHARGE_SIGNING_KEY`.
+  - Prohibits tests, demos, or agents from generating `.key` files inside the repository working directory.
+- **Authentication Gateway Lockdown**:
+  - `python tools/auth.py issue-token` strictly locked down with fail-closed refusal (exit code 4) unless explicit `--dev` flag is supplied.
+- **Switch & Mattermost Multi-Agent Documentation**:
+  - Rewrote `agents/READER.md`, `agents/AUDITOR.md`, and `agents/WRITER.md` to reference only `tools/desk.py` and 64-character receipt verification.
+  - Removed leftover stray comment lines in `agents/WRITER.md`.
+  - Updated `SWITCH_SETUP.md` with multi-agent orchestration architecture and TTY approval protocol.
+  - Elevated Switch & Mattermost story upfront in `README.md` and added honest disclosure on same-OS-user process boundaries vs. container isolation.
+- **Automated Test Suite Expansion**:
+  - Added `tests/test_approve_cli.py` (6 tests) and `tests/test_desk_cli.py` (9 tests).
+  - Test suite expanded to **227 automated test scenarios**, certified across Windows, Ubuntu, and Python 3.9–3.13.
+
+---
+
 ## [3.2.0] - 2026-11-05
 
 ### Added
