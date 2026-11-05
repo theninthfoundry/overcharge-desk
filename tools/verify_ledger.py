@@ -21,6 +21,7 @@ from audit_ledger import DEFAULT_LEDGER_DB, list_events, verify_ledger
 
 
 def main() -> int:
+    # Independent Auditor: Sequential traversal verifying continuous cryptographic hash chain
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--db", default=str(DEFAULT_LEDGER_DB), help="Path to SQLite ledger database")
     ap.add_argument("--strict", action="store_true", help="Exit code 2 on verification failure")
@@ -55,3 +56,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     run_cli(main)
+
