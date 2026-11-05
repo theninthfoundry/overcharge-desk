@@ -35,3 +35,4 @@ def list_vendors(user: User = Depends(require_permission(PERM_CASE_READ))) -> Li
             except Exception:
                 pass
     return results
+
