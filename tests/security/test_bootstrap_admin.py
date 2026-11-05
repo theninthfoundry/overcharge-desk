@@ -58,8 +58,24 @@ def test_bootstrap_seed_demo_accounts_explicit(tmp_path):
     op = repo.get_user_by_username("operator")
     assert op is not None
     assert op.is_demo is True
+
+
+def test_interactive_getpass_mismatch_raises_error(tmp_path, monkeypatch):
+    """When interactive confirmation does not match, bootstrap aborts with error."""
+    import getpass
+    inputs = iter(["Password123!", "MismatchPassword!"])
+    monkeypatch.setattr(getpass, "getpass", lambda prompt: next(inputs))
+
+    with pytest.raises(ToolError, match="Passwords do not match"):
+        bootstrap_admin(
+            username="new_admin",
+            password=None,
+            db_path=tmp_path / "test_identity.db",
+        )
+
     assert op.role == SystemRole.FINANCE_OPERATOR
 
     # Production safety check must catch demo accounts in production
     with pytest.raises(ToolError, match="Production startup refused"):
         repo.check_production_safety(app_env="production")
+
