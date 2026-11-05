@@ -73,6 +73,7 @@ class IdentityRepository:
         """Create users and sessions tables."""
         conn = self._get_connection()
         with conn:
+            # Users table: Enforces unique username and email at the storage engine level
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     user_id TEXT PRIMARY KEY,
