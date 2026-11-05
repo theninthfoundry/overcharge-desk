@@ -28,8 +28,8 @@ from audit_ledger import DEFAULT_LEDGER_DB, list_events, verify_ledger
 from pipeline import run_pipeline
 
 
-def run_full_demo(
-    # Benchmark Suite: End-to-end verification across Clean, Overcharged, Review, and Blocked casesbase_dir: Path | str = ".", clean_run: bool = False, cases_base_dir: Path | str | None = None) -> dict:
+def run_full_demo(base_dir: Path | str = ".", clean_run: bool = False, cases_base_dir: Path | str | None = None) -> dict:
+    # Benchmark Suite: End-to-end verification across Clean, Overcharged, Review, and Blocked cases
     """Execute all four benchmark demo cases end-to-end."""
     root = Path(base_dir)
     vendor_file = root / "vendors" / "acme.json"

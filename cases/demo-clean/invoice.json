@@ -26,7 +26,7 @@
   ],
   "stated_total": 30000.00,
   "source_file": "invoices/clean-inv-1001.txt",
-  "source_sha256": "3dc19e4196f33307da379b229ee24e9cba5dfe05acce8c7d8bdfcab0d968cb9a",
+  "source_sha256": "fdf8d28bb35f5b68cd51724381466687ba9024debf865f296bb45b53a8832f13",
   "extraction_issues": [],
   "extracted_at": "2026-10-01T10:00:00Z"
 }

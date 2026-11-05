@@ -26,7 +26,7 @@
   ],
   "stated_total": 54500.00,
   "source_file": "invoices/uncontracted-inv-1201.txt",
-  "source_sha256": "a6989a5d4ee0a034a82a64a5ebe5f79f10bd74dc3984c476b84a82a2adee9b33",
+  "source_sha256": "41aee76108304929bbb85a0374018e44e29eca6334d9243ec022420f1f1c144a",
   "extraction_issues": [],
   "extracted_at": "2026-12-01T10:00:00Z"
 }

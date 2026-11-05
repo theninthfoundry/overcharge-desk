@@ -26,7 +26,7 @@
   ],
   "stated_total": 68000.00,
   "source_file": "invoices/discrepancy-inv-1301.txt",
-  "source_sha256": "862a91e02eaf602bb4bf1fb46face27e751087559f7dba5aa3a1ce730b3f99b1",
+  "source_sha256": "2e9af2ae366b2c8d36a2f9cf60a28bd8cad4702fa9721966fc6b5aebd8042cd7",
   "extraction_issues": [],
   "extracted_at": "2026-11-03T11:00:00Z"
 }
