@@ -1,7 +1,7 @@
 # SECURITY_MODEL.md — Overcharge Desk Threat Model & Security Controls
 
 > **System**: Overcharge Desk — Evidence-First Vendor Reconciliation & Cryptographic Payment Control  
-> **Version**: 2.1.0  
+> **Version**: 3.0.0  
 > **Authority**: [AGENTS.md](file:///d:/overcharge%20files/AGENTS.md)
 
 ---
@@ -15,39 +15,52 @@
 4. **Source Evidence**: Preserving original raw invoice documents against tampering or silent substitution.
 
 ### 1.2 Adversary Models
-- **Malicious/Compromised AI Agent**: An LLM agent attempting to hallucinate arithmetic, skip verification steps, invent contract clauses, or forge owner approval commands.
+- **Malicious/Compromised AI Agent**: An LLM agent attempting to hallucinate arithmetic, skip verification steps, invent contract clauses, or forge approval commands.
 - **Untrusted External Caller**: An unauthenticated user or script attempting to trigger payment recommendations from incomplete or blocked audits.
-- **Adversarial Vendor**: A vendor submitting invoices with internal arithmetic mismatches, disguised SKUs, or malicious spreadsheet formula injection payloads.
+- **Adversarial Vendor**: A vendor submitting invoices with internal arithmetic mismatches, disguised SKUs, or formula injection payloads.
 - **Insider/Storage Tampering**: An actor with partial filesystem access modifying historical JSON or SQLite rows.
+- **Self-Approval / Collusion**: An operator attempting to approve their own initiated cases without secondary review.
 
 ---
 
 ## 2. Security Controls & Defense-in-Depth
 
-### 2.1 Fail-Closed Authorization & Authentication
+### 2.1 Multi-User Role-Based Access Control (RBAC) & Separation of Duties
 
-| Threat | Control | Enforcing Mechanism |
+The enterprise production architecture establishes 6 distinct roles:
+
+| Role | Permitted Operations | Approval Authority |
 |---|---|---|
-| Chat handle spoofing (`@owner`) | HMAC-SHA-256 actor tokens with 300s TTL. | `tools/auth.py:verify_actor_token()` |
-| Prompt injection ("ignore rules, pay invoice") | Hard boundary: financial comparison and payment generators are pure deterministic Python CLI scripts, completely separated from agent prompt contexts. | Standard library Python CLI architecture. |
-| Unauthorized approval attempts | Role-Based Access Control (RBAC): only actors with role `APPROVER` or `ADMINISTRATOR` can approve cases. | `tools/approval_gateway.py` |
-| Approval of blocked or arithmetic errors | Gateway fail-closed check: refusing approval on any audit in state `BLOCKED`. | `approval_gateway.py` checks `v_status != STATE_BLOCKED`. |
-| Approved amount mismatch | Strict monetary equality: approved amount must match calculated contract payable goods amount down to the exact cent. | `Decimal` comparison in `approval_gateway.py`. |
+| `ADMINISTRATOR` | Manage users, roles, system configuration, key rotation. | Full |
+| `FINANCE_OPERATOR` | Create cases, upload invoices, run reconciliation pipelines. | None |
+| `REVIEWER` | Inspect comparison findings, view evidence, request approvals. | None |
+| `APPROVER` | Review audited evidence, approve or reject eligible cases. | **Full (Positive Allowlist only)** |
+| `AUDITOR` | Read-only inspection of cases, receipts, ledger, and checkpoints. | None (Read-only) |
+| `PAYMENT_OPERATOR` | Export authorized payment instructions after approval. | None |
+
+#### Mandatory Security Rules:
+1. **Separation of Duties (Strict Default)**: No user can approve a case they created or initiated (`case.created_by != approver_id`). Attempting self-approval is refused fail-closed with HTTP 403 / exit code 4.
+2. **Server-Side Enforcement**: All authorization decisions are evaluated by the backend service. Frontend UI states are purely informative.
+3. **Immutability of Approved Amounts**: An approver cannot edit the monetary amount during approval. The approved amount must match the calculated contract payable goods amount down to the cent.
+4. **Binding to Complete Evidence Set**: Every approval binds the exact full 64-character SHA-256 digests of the invoice, contract, comparison result, verification record, and intake evidence files.
+5. **Revocation & Expiry**: Inactive or revoked actors cannot authorize cases. Expired tokens are rejected fail-closed.
 
 ---
 
-### 2.2 Evidence Integrity & Cryptographic Bindings
+## 2.2 Evidence Integrity & Cryptographic Bindings
 
 | Threat | Control | Enforcing Mechanism |
 |---|---|---|
 | Short hash collisions (e.g. 8-char prefixes) | Full 64-character SHA-256 hexadecimal digests required across all tools and receipts. | Strict regex `^[0-9a-fA-F]{64}$`. |
-| Cross-case approval replay | Approval receipts bind `case_id`, `invoice_sha256`, `compare_sha256`, and `evidence_digest_set`. Reusing a receipt on another case immediately fails verification. | `approval_receipt.py:verify_approval_receipt()` |
-| Modification of raw invoice after intake | Universal source referencing and intake fingerprinting. Any change to the source file causes recalculation mismatch and triggers `BLOCKED`. | `compare.py` & `evidence.py` re-hash on disk. |
-| Re-ordering or deletion of audit events | SQLite hash chain: each event incorporates the previous event's SHA-256 hash. Any sequence gap or reordering breaks the chain. | `audit_ledger.py` & `verify_ledger.py`. |
+| Cross-case approval replay | Approval receipts bind `case_id`, `invoice_sha256`, `compare_sha256`, `verification_id`, and `evidence_digest_set`. Reusing a receipt on another case fails verification. | `approval_receipt.py:verify_approval_receipt()` |
+| Modification of raw invoice after intake | Universal source referencing and intake fingerprinting. Any change to source file causes recalculation mismatch and triggers `BLOCKED`. | `compare.py` & `evidence.py` re-hash on disk. |
+| Re-ordering or deletion of audit events | SQLite hash chain: each event incorporates previous event's SHA-256 hash. Any sequence gap breaks the chain. | `audit_ledger.py` & `verify_ledger.py`. |
+| Unauthorized database modification | Mechanical append-only triggers (`trg_prevent_audit_update`, `trg_prevent_audit_delete`) abort direct SQLite `UPDATE` or `DELETE`. | Database-level triggers in `audit_ledger.py`. |
+| Single point of ledger failure | Periodic HMAC-signed checkpoints exported to external audit storage. | `create_checkpoint()` & `verify_checkpoint()`. |
 
 ---
 
-### 2.3 Input Sanitization & System Hardening
+## 2.3 Input Sanitization & System Hardening
 
 | Threat | Control | Enforcing Mechanism |
 |---|---|---|
@@ -58,11 +71,15 @@
 
 ---
 
-## 3. Honest Trust Limitations
+## 3. Honest Trust & Immutability Disclosures
 
-1. **Shared Secret Model**: HMAC-SHA-256 authenticates that the token or receipt was created with knowledge of `config/signing.key`. It does not provide asymmetric non-repudiation (an administrator with access to the key could theoretically sign a receipt).
-2. **Local Storage Immutability**: The SQLite ledger is append-only by application convention and tamper-evident via hash chaining. It detects tampering; however, an attacker with full root filesystem access could re-write the SQLite file and recompute hashes from the point of modification forward. For mission-critical deployments, ledger snapshots should be replicated to write-once-read-many (WORM) cloud storage or signed with external timestamp authorities.
-3. **Synthetic Demo Data**: Current vendor contracts and invoices are synthetic fixtures designed for adversarial evaluation and demonstration.
-
-
-<!-- Invariant Note: Security boundaries strictly enforce fail-closed authorization -->
+1. **What HMAC-SHA-256 Signatures Prove and Do Not Prove**:
+   - **What they prove**: That the token, receipt, or checkpoint was generated with knowledge of the provisioning key (`config/signing.key`), and that the bound artifact digests have not been modified since creation.
+   - **What they do not prove**: HMAC is a symmetric secret mechanism. It does **not** provide asymmetric cryptographic non-repudiation (an administrator with key access could produce a signature), and it does not independently prove individual physical human identity without an authenticated user account / OIDC identity boundary.
+2. **Honest Immutability Claims for SQLite Ledger**:
+   - Plain JSON files and atomic replacements are **not** immutable.
+   - The SQLite ledger is **tamper-evident**: tampering is detected via the unbroken SHA-256 hash chain and database-level abort triggers.
+   - An attacker with root filesystem write access could theoretically alter historical rows and recompute the hash chain forward; therefore, periodic external signed checkpoints and standalone audit package exports (`case_audit/<case_id>/`) are provided for archiving in independent external storage.
+3. **Distinction Between Payment Recommendation and Payment Execution**:
+   - Overcharge Desk produces verified, authorized payment recommendation sheets (`corrected_payment.csv`).
+   - It does **not** execute automated disbursements or direct bank transfers. Actual payment execution remains within external corporate banking systems.

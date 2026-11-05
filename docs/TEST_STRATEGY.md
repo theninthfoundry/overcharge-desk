@@ -1,7 +1,7 @@
 # TEST_STRATEGY.md — Adversarial Testing & Verification Strategy
 
 > **System**: Overcharge Desk — Evidence-First Vendor Reconciliation & Cryptographic Payment Control  
-> **Version**: 2.1.0  
+> **Version**: 3.0.0  
 > **Authority**: [AGENTS.md](file:///d:/overcharge%20files/AGENTS.md) Invariant 5 (Radical Engineering Transparency)
 
 ---
@@ -10,7 +10,7 @@
 
 Overcharge Desk enforces a zero-trust, test-driven engineering culture. No feature or security boundary is considered complete without automated test execution verifying both nominal and adversarial behaviors.
 
-The automated test suite contains **136 passing tests** across 9 test modules:
+The automated test suite contains **139 passing tests** across 9 test modules:
 
 ```text
 ============================= test session starts =============================
@@ -18,19 +18,19 @@ platform win32 -- Python 3.13.5, pytest-9.1.0
 rootdir: D:\overcharge files
 configfile: pytest.ini
 testpaths: tests
-collected 136 items
+collected 139 items
 
-tests/test_audit_ledger.py .............. [ 8 tests: Genesis, chain links, payload tampering, gaps, reordering]
+tests/test_audit_ledger.py .............. [11 tests: Genesis, chain links, triggers, tampering, gaps, checkpoints]
 tests/test_auth_and_approval.py ......... [15 tests: HMAC tokens, TTL, role permissions, signed receipts, gateway]
-tests/test_boundary_audit.py ............ [20 tests: 3-tier artifact model, path traversal, injection, digests]
+tests/test_boundary_audit.py ............ [20 tests: 4-tier artifact model, path traversal, injection, digests]
 tests/test_case_manager_and_evidence.py . [ 8 tests: Directory layout, state transitions, SHA-256 tracking]
 tests/test_compare.py .................. [21 tests: Exact decimal precision, rounding, SKU boundaries, dates]
 tests/test_financial_adversarial.py .... [35 tests: Non-finite inputs, negative numbers, formula injection]
 tests/test_pipeline_orchestration.py .... [ 3 tests: Manifest generation, approval enforcement, recovery]
 tests/test_tools.py .................... [25 tests: CLI utilities, error exits, seed parity]
-tests/test_demo_cases.py ................ [ 1 test:  Full 4-case end-to-end benchmark suite]
+tests/test_demo_cases.py ................ [ 1 test:  Full 6-case benchmark suite + audit package export]
 
-============================= 136 passed in ~5s =============================
+============================= 139 passed in ~8s =============================
 ```
 
 ---
@@ -48,8 +48,9 @@ Covers all arithmetic edge cases, malformed numeric strings, and boundary anomal
 - **Scenario 30–35**: Spreadsheet formula injection, malformed comparison JSON, tampered comparison digests, blocked-draft refusal, incomplete totals defense.
 
 ### 2.2 Boundary Audit Suite (`test_boundary_audit.py` — 20 tests)
-Verifies operational trust boundaries and the three-tier artifact model:
-- Enforcing refusal of `payment_sheet.py` on `BLOCKED` or `REVIEW_REQUIRED` audits.
+Verifies operational trust boundaries and the four-tier artifact model:
+- Enforcing pre-approval preview (`payment_preview.csv`) on unapproved runs.
+- Enforcing refusal of `corrected_payment.csv` without signed approval receipts.
 - Verification that `partial_review.csv` contains zero payable recommendations.
 - Verification that `blocked_review_report.csv` contains zero payable columns and values.
 - Comprehensive path traversal testing (Windows backslashes, POSIX forward slashes, mixed slashes, UNC paths, drive colons).
@@ -64,18 +65,19 @@ Verifies identity, tokens, and cryptographic receipt issuance:
 - Role-Based Access Control (RBAC) permission checking.
 - Cryptographic approval receipt generation and signature validation.
 - Rejection of tampered amounts or cross-case receipt replay.
-- Gateway fail-closed check refusing approval on `BLOCKED` audits.
+- Gateway fail-closed check refusing approval on non-`VERIFIED` audits.
 - Gateway strict check matching approved amount to calculated contract payable goods amount.
 - Rejection recording requiring mandatory owner rationale.
 
-### 2.4 Audit Ledger Suite (`test_audit_ledger.py` — 8 tests)
-Verifies SQLite transaction safety and cryptographic hash chains:
+### 2.4 Audit Ledger Suite (`test_audit_ledger.py` — 11 tests)
+Verifies SQLite transaction safety, cryptographic hash chains, triggers, and checkpoints:
 - Genesis event has `previous_event_hash == "0" * 64`.
 - Monotonic sequence numbering and unbroken hash chaining across events.
+- Database triggers aborting direct `UPDATE` and `DELETE` on audit events.
 - Detection of modified payload in historical events.
 - Detection of deleted events (sequence gaps).
 - Detection of reordered events or broken hash links.
-- Case-specific event filtering and empty ledger verification.
+- Generation and independent cryptographic verification of HMAC-signed checkpoints.
 
 ### 2.5 Case Manager & Evidence Registry Suite (`test_case_manager_and_evidence.py` — 8 tests)
 Verifies case directory lifecycle and file fingerprinting:
@@ -87,34 +89,17 @@ Verifies case directory lifecycle and file fingerprinting:
 
 ### 2.6 Pipeline Orchestration Suite (`test_pipeline_orchestration.py` — 3 tests)
 Verifies end-to-end controlled pipeline execution:
-- Execution manifest (`manifest.json`) recording stage results, artifact references, and hashes.
-- Evidence registry auto-population.
+- Execution manifest (`manifest.json`) recording 13 stage results, durations, artifact references, and hashes.
+- Evidence registry auto-population and fail-closed error handling.
 - Pipeline requiring approval fails closed when approval receipt is missing.
 - Pipeline succeeds and emits `corrected_payment.csv` when valid approval receipt is provided.
 
 ### 2.7 End-to-End Demo Suite (`test_demo_cases.py` — 1 test)
-Continuously runs the complete four-case benchmark suite in CI:
-- Case A (Clean match)
-- Case B (Overcharge with ₹6,000 withholding)
-- Case C (Review required with uncontracted line)
-- Case D (Blocked arithmetic discrepancy)
-- Verifies ledger hash chain integrity from genesis to head.
-
----
-
-## 3. How to Run the Tests
-
-```bash
-# Run all tests with standard summary
-python -m pytest
-
-# Run with verbose test-by-test output
-python -m pytest -v
-
-# Run a specific test suite
-python -m pytest tests/test_auth_and_approval.py -v
-python -m pytest tests/test_audit_ledger.py -v
-
-# Run the four-case demo verification suite directly
-python tools/run_demo_suite.py --clean
-```
+Continuously runs the complete 6-case benchmark suite in CI:
+- **Case A** (Clean match)
+- **Case B** (Overcharge with ₹6,000 withholding)
+- **Case C** (Review required with uncontracted line)
+- **Case D** (Blocked arithmetic discrepancy)
+- **Case E** (Post-approval evidence tampering refusal)
+- **Case F** (Audit ledger failure abort)
+- Plus standalone Case Audit Package export and cryptographic verification.
