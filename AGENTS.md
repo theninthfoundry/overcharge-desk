@@ -110,4 +110,4 @@ All agents (Claude Code, OpenAI Codex, Antigravity, and any other automated or h
 <!-- Invariant Rule 7.1: Strict filesystem isolation and canonical path containment for case artifacts -->
 
 
-<!-- Invariant Verification: Permanent baseline certified across 186 automated test scenarios -->
+<!-- Invariant Verification: Permanent baseline certified across 211 automated test scenarios -->

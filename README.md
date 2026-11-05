@@ -3,7 +3,7 @@
 > **Deterministic, Evidence-First Vendor Reconciliation & Cryptographic Payment Control**  
 > Verifies commercial invoices against contracts with exact decimal arithmetic, binds human approvals to immutable cryptographic evidence receipts, logs append-only event chains in a tamper-evident SQLite ledger, and strictly prevents unauthorized or unverified payment recommendations.
 
-[![Tests](https://img.shields.io/badge/Tests-186%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-211%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
 [![Python](https://img.shields.io/badge/Python-3.9%20|%203.10%20|%203.11%20|%203.12%20|%203.13-blue?style=for-the-badge&logo=python)](https://python.org)
 [![Arithmetic](https://img.shields.io/badge/Arithmetic-Exact%20Decimal%20(No%20Floats)-brightgreen?style=for-the-badge)](AGENTS.md)
 [![Security](https://img.shields.io/badge/Security-Fail--Closed%20Argon2id%20&%20RBAC-red?style=for-the-badge)](docs/SECURITY_MODEL.md)

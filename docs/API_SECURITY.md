@@ -65,3 +65,4 @@ def approve_or_reject_case(
 ```
 
 If the authenticated user lacks the required permission, the request is immediately aborted with `HTTP 403 Forbidden` and logged with correlation metadata.
+

@@ -72,3 +72,4 @@ When an approved case is processed for payment sheet generation or audit export:
 4. The HMAC-SHA-256 signature is verified using the key corresponding to `signing_key_id`.
 
 If **any single character** in `compare.json` or `invoice.json` has been altered after approval, verification fails closed, logging `SECURITY_ALERT: RECEIPT_DIGEST_MISMATCH` and halting payment generation.
+

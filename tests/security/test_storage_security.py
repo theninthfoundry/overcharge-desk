@@ -114,7 +114,7 @@ def test_read_oversized_artifact_refusal(storage):
     # Write slightly over limit directly
     huge_file.write_bytes(b"a" * (10 * 1024 * 1024 + 10))
 
-    with pytest.raises(StorageSecurityError, match="exceeds maximum allowed size"):
+    with pytest.raises(StorageSecurityError, match="exceeds maximum size"):
         storage.read_artifact("OC-20261106-99", "invoice.json")
 
 

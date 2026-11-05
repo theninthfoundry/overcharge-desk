@@ -57,3 +57,4 @@ Once an authorized payment instruction has been downloaded via `GET /cases/{case
 ### 3.3 CSV Injection Defense
 Generated disbursement spreadsheets sanitize all fields to prevent formula injection when loaded into spreadsheet programs (e.g., Excel):
 - Fields beginning with `=`, `+`, `-`, `@`, `\t`, or `\r` are prefixed with a single quote (`'`).
+

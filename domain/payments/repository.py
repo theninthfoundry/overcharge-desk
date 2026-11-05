@@ -179,3 +179,4 @@ class PaymentRepository:
             cancelled_at=row["cancelled_at"],
             cancellation_reason=row["cancellation_reason"],
         )
+

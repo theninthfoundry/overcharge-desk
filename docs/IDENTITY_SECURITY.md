@@ -82,3 +82,4 @@ python -m tools.bootstrap_admin --username <admin_username>
 At server startup, `IdentityRepository.check_production_safety()` executes:
 - When `APP_ENV=production`:
   - If any active account has `is_demo = 1` or demo usernames (`admin`, `operator`, `reviewer`, `approver`, `auditor`, `pay_operator`) with default credentials, startup fails immediately (`ToolError`, exit code 4).
+

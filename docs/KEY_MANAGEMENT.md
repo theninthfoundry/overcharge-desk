@@ -93,3 +93,4 @@ Because all approval receipts record their binding `signing_key_id`, verificatio
 key_bytes = key_manager.get_key_by_id(receipt["signing_key_id"])
 ```
 This guarantees that rotating signing keys does not invalidate previously approved receipts or historical ledger entries.
+

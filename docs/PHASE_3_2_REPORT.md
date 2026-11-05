@@ -3,7 +3,7 @@
 > **Project**: Overcharge Desk — Evidence-First Vendor Reconciliation & Cryptographic Payment Control  
 > **Status**: Completed & Certified  
 > **Repository**: [theninthfoundry/overcharge-desk](https://github.com/theninthfoundry/overcharge-desk)  
-> **Test Suite**: 186 passed, 1 skipped across 17 test modules  
+> **Test Suite**: 211 passed, 1 skipped across 19 test modules  
 > **Benchmark Suite**: 6/6 canonical benchmark cases passing with 100% verified ledger integrity  
 
 ---
@@ -132,3 +132,4 @@ The following specifications and implementations are committed in the repository
 13. `docs/APPROVAL_HARDENING.md`: Authorization protocol, separation of duties, and evidence binding.
 14. `docs/PAYMENT_INSTRUCTION_PROTOCOL.md`: Payment instruction release controls and duplicate prevention.
 15. `docs/OPERATIONAL_READINESS.md`: Observability, health monitoring, and operational runbooks.
+

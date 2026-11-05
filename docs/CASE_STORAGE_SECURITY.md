@@ -80,3 +80,4 @@ All case metadata, receipts, and JSON artifacts are written via `write_json_atom
 3. An atomic filesystem replacement (`os.replace`) overwrites the destination path.
 
 This guarantees that an application crash or power loss never leaves a partially-written or truncated JSON file on disk.
+

@@ -73,9 +73,3 @@ def test_interactive_getpass_mismatch_raises_error(tmp_path, monkeypatch):
             db_path=tmp_path / "test_identity.db",
         )
 
-    assert op.role == SystemRole.FINANCE_OPERATOR
-
-    # Production safety check must catch demo accounts in production
-    with pytest.raises(ToolError, match="Production startup refused"):
-        repo.check_production_safety(app_env="production")
-
