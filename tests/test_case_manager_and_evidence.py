@@ -71,6 +71,7 @@ def test_valid_state_transitions(tmp_path):
 
 
 def test_invalid_state_transitions_refused(tmp_path):
+    # State Machine Test: Verifies illegal transition rejection and terminal state immutability
     cases_dir = tmp_path / "cases"
     case_id = "OC-20261106-01"
     init_case(case_id, cases_dir=cases_dir)
@@ -182,3 +183,4 @@ def test_evidence_digest_map(tmp_path):
     assert len(digests) == 2
     assert "EV-OC-20261106-04-001" in digests
     assert "EV-OC-20261106-04-002" in digests
+
