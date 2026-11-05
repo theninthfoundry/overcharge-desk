@@ -17,6 +17,7 @@ _auth_service = AuthorizationService(enforce_strict_separation_of_duties=True)
 _key_manager = KeyManager(app_env=os.getenv("APP_ENV", "development"))
 
 # Rate limiting and failed login tracking (in-memory tracking for brute-force protection)
+# Brute-force protection: 5 attempts threshold triggers 300s (5-minute) lockout window
 _FAILED_LOGINS: Dict[str, Tuple[int, float]] = {}  # username -> (failed_count, lockout_until)
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_DURATION_SECONDS = 300  # 5 minutes
