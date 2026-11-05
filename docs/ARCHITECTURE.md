@@ -111,6 +111,8 @@ Cross-dimensional consistency is validated by `validate_state_consistency()`, re
 ```text
 overcharge-desk/
 ├── tools/                  # Deterministic core financial engine & CLI tools
+│   ├── desk.py             # Unified agent CLI (intake, audit, status, history, finalize)
+│   ├── approve.py          # Interactive terminal owner approval CLI (TTY + Argon2id)
 │   ├── compare.py          # Exact Decimal rate reconciliation
 │   ├── check_invoice.py    # Invoice integrity & schema validator
 │   ├── validate_comparison.py # Independent verification & verification.json generator
@@ -133,7 +135,7 @@ overcharge-desk/
 │       └── main.py         # Application entry point
 ├── apps/                   # Client applications
 │   └── web/                # Finance Operations web dashboard
-└── tests/                  # Test suites (139 passing tests)
+└── tests/                  # Test suites (227 passing tests)
 ```
 
 ---
@@ -151,3 +153,41 @@ $$\text{EventHash}_n = \text{SHA-256}\left(\text{canonical}\left(\begin{aligned}
 - **Append-Only Enforcement**: SQLite triggers (`trg_prevent_audit_update`, `trg_prevent_audit_delete`) abort direct `UPDATE` and `DELETE` attempts.
 - **Signed Checkpoints**: Periodic signed checkpoints capture `highest_sequence`, `head_event_hash`, and a cumulative `chain_digest` signed with HMAC-SHA-256.
 - **Independent Verification**: `verify_ledger.py` validates the database independently of runtime claims.
+
+---
+
+## 6. Switch & Mattermost Multi-Agent Workflow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Owner as Human Owner (@owner)
+    participant Room as Mattermost (#overcharge-desk)
+    participant Reader as Reader Agent (Claude Code)
+    participant Auditor as Auditor Agent (Codex)
+    participant Writer as Writer Agent (Claude Code)
+    participant Engine as Desk Engine (tools/desk.py)
+    participant TTY as Owner Terminal (tools/approve.py)
+
+    Owner->>Room: Uploads invoice.txt
+    Room->>Reader: Notifies Reader Agent
+    Reader->>Engine: python tools/desk.py intake
+    Engine-->>Reader: Registered evidence & source_sha256
+    Reader->>Room: [READER -> AUDITOR] Case ready for audit
+
+    Room->>Auditor: Notifies Auditor Agent
+    Auditor->>Engine: python tools/desk.py audit
+    Auditor->>Engine: python tools/desk.py history --vendor acme
+    Engine-->>Auditor: Rate variances & historical memory
+    Auditor->>Room: [AUDITOR -> ROOM] Overcharge detected (INR 6,000). Run tools/approve.py
+
+    Owner->>TTY: python tools/approve.py demo-overcharge
+    TTY->>Owner: Prompts for Argon2id password
+    Owner-->>TTY: Submits credentials
+    TTY-->>Owner: Emits 64-char receipt hash
+    Owner->>Room: Posts verified receipt hash
+
+    Room->>Writer: Notifies Writer Agent
+    Writer->>Engine: python tools/desk.py finalize
+    Engine-->>Writer: Emits corrected_payment.csv (INR 6,000 withheld)
+    Writer->>Room: [WRITER -> ROOM] Authorized payment sheet generated
