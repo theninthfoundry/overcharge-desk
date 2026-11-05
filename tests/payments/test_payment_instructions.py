@@ -159,3 +159,30 @@ def test_csv_formula_injection_escaping():
     assert "'-BANK" in csv_out
 
 
+def test_json_payment_instruction_serialization():
+    """Verify JSON export contains all mandatory machine-readable treasury fields."""
+    import json
+    from domain.payments.exports import export_payment_instruction_json
+    from domain.payments.models import PaymentInstruction
+    inst = PaymentInstruction(
+        instruction_id="PI-TEST-JSON",
+        case_id="OC-JSON-01",
+        approval_receipt_id="AR-001",
+        approved_amount="50000.00",
+        currency="INR",
+        vendor_id="acme",
+        destination_reference="HDFC-****1234",
+        destination_verified=True,
+        idempotency_key="IDEM-JSON",
+        status="AUTHORIZED",
+        created_at="2026-11-05T00:00:00Z",
+        expires_at="2026-11-12T00:00:00Z",
+    )
+    json_str = export_payment_instruction_json(inst)
+    parsed = json.loads(json_str)
+    assert parsed["instruction_id"] == "PI-TEST-JSON"
+    assert parsed["approved_amount"] == "50000.00"
+    assert parsed["destination_verified"] is True
+
+
+
