@@ -9,12 +9,19 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "tools"))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+if str(ROOT / "tools") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools"))
 
 
 @pytest.fixture(scope="session", autouse=True)
 def fresh_clone_test_environment(tmp_path_factory):
     """Ensure key isolation outside the repository and generate demo artifacts if missing on fresh clone."""
+    # Backup original demo invoice to keep git working tree clean across test runs
+    demo_inv = ROOT / "cases" / "demo-overcharge" / "invoice.json"
+    orig_demo_inv_bytes = demo_inv.read_bytes() if demo_inv.exists() else None
+
     # 1. Isolate keys into a temporary test directory so no key files are written to the repo
     test_key_dir = tmp_path_factory.mktemp("test_keys")
     os.environ["OVERCHARGE_KEY_DIR"] = str(test_key_dir)
@@ -38,11 +45,18 @@ def fresh_clone_test_environment(tmp_path_factory):
             needs_regen = True
 
     if needs_regen:
-        from tools.run_demo_suite import run_full_demo
         try:
+            from run_demo_suite import run_full_demo
             run_full_demo(base_dir=ROOT, clean_run=True, key_file=key_path)
-        except Exception:
-            pass
+        except Exception as exc:
+            import warnings
+            warnings.warn(f"Demo suite regeneration notice: {exc}")
+
+    yield
+
+    # Restore pristine state of demo-overcharge invoice if modified during test execution
+    if orig_demo_inv_bytes and demo_inv.exists():
+        demo_inv.write_bytes(orig_demo_inv_bytes)
 
 
 @pytest.fixture

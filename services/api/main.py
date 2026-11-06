@@ -13,13 +13,13 @@ if str(TOOLS_DIR) not in sys.path:
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from fastapi import FastAPI, HTTPException, status
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from common import ToolError
-from domain.identity.key_manager import KeyManager
 from domain.identity.repository import IdentityRepository
 from services.api.middleware import SecurityHeadersMiddleware, get_key_manager
 from services.api.routes import (
@@ -47,11 +47,37 @@ if APP_ENV == "production":
     if not allowed_origins or "*" in allowed_origins:
         raise RuntimeError("FATAL: Insecure CORS configuration in production. Explicit trusted origins are required.")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager ensuring directories and schemas are initialized on startup."""
+    try:
+        from services.api.workspace_service import ensure_base_storage_initialized
+        ensure_base_storage_initialized()
+    except Exception:
+        pass
+    yield
+
+
 app = FastAPI(
     title="Overcharge Desk Operations API",
     description="Deterministic Vendor Reconciliation & Cryptographic Payment Control Platform",
     version="3.2.0",
+    lifespan=lifespan,
 )
+
+# ToolError domain exception handler for consistent REST error contracts
+@app.exception_handler(ToolError)
+async def tool_error_exception_handler(request: Request, exc: ToolError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    if exc.code == 4:
+        status_code = status.HTTP_403_FORBIDDEN
+    elif exc.code == 2:
+        status_code = status.HTTP_404_NOT_FOUND
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": exc.message, "error": exc.message, "code": exc.code},
+    )
 
 # Security headers middleware
 app.add_middleware(SecurityHeadersMiddleware)
@@ -99,7 +125,10 @@ def health_check():
     # 1. Database check
     try:
         id_repo = IdentityRepository()
-        id_repo.check_production_safety()
+        try:
+            id_repo.check_production_safety(app_env=APP_ENV)
+        except TypeError:
+            id_repo.check_production_safety()
         checks["identity_database"] = "OK"
         checks["database"] = "OK"
     except Exception as exc:
@@ -120,7 +149,7 @@ def health_check():
 
     # 3. Storage check
     try:
-        cases_p = Path("cases")
+        cases_p = ROOT_DIR / "cases"
         cases_p.mkdir(parents=True, exist_ok=True)
         test_file = cases_p / ".health_check.tmp"
         test_file.write_text("health")
@@ -143,8 +172,14 @@ def health_check():
     }
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """Favicon endpoint preventing 404 console noise in browser interfaces."""
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # Static web app serving
-web_dir = Path("apps/web")
+web_dir = ROOT_DIR / "apps" / "web"
 if (web_dir / "index.html").exists():
     @app.get("/", response_class=HTMLResponse, tags=["Frontend"])
     def serve_frontend():

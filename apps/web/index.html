@@ -18,6 +18,7 @@
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="styles.css">
+  <meta name="theme-color" content="#0a0a0c">
 </head>
 <body class="app-shell">
   <!-- Top Operational Header -->
@@ -29,6 +30,7 @@
         <span class="text-xs font-medium hidden sm:inline" style="color: var(--text-secondary);">Financial Control Infrastructure</span>
         <span style="color: var(--border-secondary);" class="hidden md:inline">/</span>
         <span id="header-breadcrumb" class="text-xs font-semibold mono hidden md:inline" style="color: var(--text-primary);">Overview</span>
+        <span id="demo-env-badge" class="status-tag status-tag-amber text-[10px] mono hidden">DEMO DATASET ACTIVE</span>
       </div>
     </div>
 
@@ -478,8 +480,8 @@
                 </div>
               </div>
               <div class="panel-body space-y-4">
-                <label class="flex items-start gap-2.5 cursor-pointer text-xs">
-                  <input type="checkbox" id="nc-auto-reconcile" checked class="mt-0.5">
+                <label for="nc-auto-reconcile" class="flex items-start gap-2.5 cursor-pointer text-xs">
+                  <input type="checkbox" id="nc-auto-reconcile" checked class="mt-0.5" aria-label="Run 13-Stage Reconciliation Immediately">
                   <span>
                     <strong style="color: var(--text-primary);">Run 13-Stage Reconciliation Immediately</strong>
                     <span class="block mt-0.5" style="color: var(--text-secondary);">
@@ -883,6 +885,7 @@
               <input
                 type="text"
                 id="ledger-case-filter"
+                aria-label="Filter ledger events by Case ID or Event Type"
                 oninput="filterLedgerEventsClient()"
                 placeholder="Filter by Case ID or Event Type..."
                 class="input-field mono"
