@@ -61,7 +61,9 @@ class CaseDetailResponse(CaseSummaryResponse):
 class CreateCaseRequest(BaseModel):
     case_id: str = Field(..., description="Unique case identifier, e.g. OC-20261106-99")
     vendor_id: str = Field("acme", description="Vendor identifier")
+    vendor_name: Optional[str] = None
     invoice_json: Dict[str, Any] = Field(..., description="Extracted invoice data conforming to schema")
+    auto_reconcile: bool = False
 
 
 class ReconcileRequest(BaseModel):

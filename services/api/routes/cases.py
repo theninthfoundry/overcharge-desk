@@ -82,6 +82,12 @@ def create_case(
             invoice_json_content=req.invoice_json,
             creator_user=user,
         )
+        if req.auto_reconcile and case_svc.auth_service.has_permission(user, PERM_CASE_RECONCILE):
+            try:
+                case_svc.reconcile_case(case_id=req.case_id, operator=user, require_approval=False)
+                detail = case_svc.get_case(req.case_id) or detail
+            except Exception:
+                pass
         return CaseDetailResponse(**detail.to_dict())
     except ToolError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
