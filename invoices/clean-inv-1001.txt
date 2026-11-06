@@ -1,0 +1,14 @@
+ACME SUPPLIES PVT LTD
+Tax Invoice (SYNTHETIC DEMO DATA - CLEAN MATCH)
+
+Invoice No:   INV-1001
+Invoice Date: 2026-10-01
+Currency:     INR
+Bill To:      Demo Packaging Co.
+
+Line | Description                       | Qty | Unit | Unit Price | Line Total
+1    | Corrugated carton, 5-ply (CC-5)   | 200 | unit | 100.00     | 20,000.00
+2    | Pallet wrap roll (PW-1)           | 40  | unit | 250.00     | 10,000.00
+
+Total: 30,000.00
+Amounts exclude taxes.
