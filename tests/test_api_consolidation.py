@@ -133,3 +133,39 @@ def test_settings_users_endpoint(admin_token):
     data = resp.json()
     assert "users" in data
     assert "roles" in data
+
+
+def test_create_case_auto_reconcile(admin_token):
+    """Verify creating a case with auto_reconcile flag."""
+    import shutil
+    from pathlib import Path
+    from common import load_json
+    case_id = "OC-20261106-99"
+    c_dir = Path("cases") / case_id
+    if c_dir.exists():
+        shutil.rmtree(c_dir, ignore_errors=True)
+
+    base_inv = load_json("cases/demo-clean/invoice.json")
+    invoice_payload = {
+        **base_inv,
+        "case_id": case_id,
+        "invoice_number": "INV-1001-AUTOREC",
+    }
+    try:
+        resp = client.post(
+            "/api/v1/cases",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={
+                "case_id": case_id,
+                "vendor_id": "acme",
+                "invoice_json": invoice_payload,
+                "auto_reconcile": True,
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["case_id"] == case_id
+        assert data["verification_status"] == "VERIFIED"
+    finally:
+        if c_dir.exists():
+            shutil.rmtree(c_dir, ignore_errors=True)
