@@ -10,6 +10,7 @@ from domain.authorization.policies import PERM_AUDIT_CHECKPOINT, PERM_AUDIT_READ
 from domain.identity.models import User
 from services.api.middleware import require_permission
 from services.api.schemas import CheckpointResponse, LedgerVerifyResponse
+from services.api.workspace_service import list_checkpoints_payload
 
 # Directly use existing ledger engine
 from audit_ledger import DEFAULT_LEDGER_DB, create_checkpoint, list_events, verify_checkpoint, verify_ledger
@@ -61,4 +62,13 @@ def trigger_checkpoint(
         )
     except ToolError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@router.get("/ledger/checkpoints")
+def list_checkpoints(
+    user: User = Depends(require_permission(PERM_AUDIT_READ)),
+) -> List[Dict[str, Any]]:
+    """Return all signed ledger checkpoints and cryptographic digests."""
+    return list_checkpoints_payload()
+
 
