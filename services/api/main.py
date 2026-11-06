@@ -22,7 +22,20 @@ from common import ToolError
 from domain.identity.key_manager import KeyManager
 from domain.identity.repository import IdentityRepository
 from services.api.middleware import SecurityHeadersMiddleware, get_key_manager
-from services.api.routes import audit, auth, cases, vendors
+from services.api.routes import (
+    approvals,
+    audit,
+    auth,
+    cases,
+    contracts,
+    demo,
+    evidence,
+    integrations,
+    overview,
+    payments,
+    settings,
+    vendors,
+)
 
 APP_ENV = os.getenv("APP_ENV", "development").lower()
 
@@ -54,13 +67,23 @@ app.add_middleware(
 
 # Include API Routers under /api/v1
 api_prefix = "/api/v1"
+app.include_router(overview.router, prefix=api_prefix)
 app.include_router(auth.router, prefix=api_prefix)
 app.include_router(cases.router, prefix=api_prefix)
+app.include_router(contracts.router, prefix=api_prefix)
+app.include_router(evidence.router, prefix=api_prefix)
+app.include_router(approvals.router, prefix=api_prefix)
+app.include_router(payments.router, prefix=api_prefix)
 app.include_router(audit.router, prefix=api_prefix)
 app.include_router(vendors.router, prefix=api_prefix)
+app.include_router(integrations.router, prefix=api_prefix)
+app.include_router(settings.router, prefix=api_prefix)
+app.include_router(demo.router, prefix=api_prefix)
 
 
 @app.get("/api/v1/health", tags=["Health"])
+@app.get("/api/v1/system/health", tags=["Health"])
+@app.get("/api/health", tags=["Health"])
 def health_check():
     """Operational health endpoint distinguishing LIVE, READY, and DEGRADED states.
     
