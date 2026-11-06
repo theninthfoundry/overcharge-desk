@@ -355,7 +355,8 @@ def test_p1_2_signing_key_isolation_and_permissions(tmp_path, monkeypatch):
     kb = ensure_signing_key(dev_key_path)
     assert len(kb) >= 32
     mode = stat.S_IMODE(dev_key_path.stat().st_mode)
-    assert mode == 0o600
+    if os.name != "nt":
+        assert mode == 0o600
 
 
 # ---------------------------------------------------------------------------
