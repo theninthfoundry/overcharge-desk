@@ -1,11 +1,13 @@
 """Case management, reconciliation, approval, and artifact endpoints."""
 from __future__ import annotations
 
-from typing import List, Optional
+import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, Response
 
-from common import ToolError
+from common import ToolError, load_json
 from domain.authorization.policies import (
     PERM_CASE_APPROVE,
     PERM_CASE_CREATE,
@@ -15,6 +17,8 @@ from domain.authorization.policies import (
 )
 from domain.cases.service import CaseService
 from domain.identity.models import User
+from evidence import register_evidence, verify_evidence
+from audit_ledger import DEFAULT_LEDGER_DB, record_event
 from services.api.middleware import get_current_user, require_permission
 from services.api.schemas import (
     ApprovalDecisionRequest,
@@ -28,6 +32,7 @@ from services.api.schemas import (
     ReconcileRequest,
     ReconcileResponse,
 )
+from services.api.workspace_service import ROOT_DIR, build_case_workspace
 
 router = APIRouter(prefix="/cases", tags=["Cases"])
 
@@ -249,5 +254,107 @@ def export_payment_instruction(
     except ToolError as exc:
         code = status.HTTP_403_FORBIDDEN if exc.code == 4 else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=code, detail=str(exc))
+
+
+@router.get("/{case_id}/workspace")
+def get_case_workspace(
+    case_id: str,
+    user: User = Depends(require_permission(PERM_CASE_READ)),
+    case_svc: CaseService = Depends(get_case_service),
+) -> Dict[str, Any]:
+    """Retrieve full unified workspace context for financial investigation."""
+    ws = build_case_workspace(case_id, user)
+    if not ws:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Case '{case_id}' not found")
+    return ws
+
+
+@router.post("/{case_id}/evidence/verify")
+def verify_case_evidence(
+    case_id: str,
+    user: User = Depends(require_permission(PERM_CASE_READ)),
+    case_svc: CaseService = Depends(get_case_service),
+) -> Dict[str, Any]:
+    """Verify cryptographic hashes and signatures of all registered case evidence on disk."""
+    c_dir = case_svc._resolve_case_dir(case_id)
+    if not c_dir or not c_dir.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Case '{case_id}' not found")
+    try:
+        res = verify_evidence(c_dir, base_dir=ROOT_DIR)
+        res["verified"] = bool(res.get("valid", res.get("ok", False)))
+        return res
+    except ToolError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@router.post("/{case_id}/evidence", status_code=status.HTTP_201_CREATED)
+def add_case_evidence(
+    case_id: str,
+    body: Dict[str, Any],
+    user: User = Depends(require_permission(PERM_CASE_CREATE)),
+    case_svc: CaseService = Depends(get_case_service),
+) -> Dict[str, Any]:
+    """Register supporting evidence artifact into immutable case registry."""
+    c_dir = case_svc._resolve_case_dir(case_id)
+    if not c_dir or not c_dir.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Case '{case_id}' not found")
+    filename = str(body.get("filename", "")).strip()
+    artifact_type = str(body.get("artifact_type", "SUPPORTING_DOCUMENT")).strip().upper()
+    content_text = str(body.get("content", ""))
+    if not filename or not content_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Both 'filename' and 'content' are required to register evidence",
+        )
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", Path(filename).name)
+    att_dir = c_dir / "attachments"
+    att_dir.mkdir(parents=True, exist_ok=True)
+    target_file = att_dir / safe_name
+    target_file.write_text(content_text, encoding="utf-8")
+
+    canonical_case_id = case_id
+    if (c_dir / "invoice.json").exists():
+        try:
+            canonical_case_id = load_json(c_dir / "invoice.json").get("case_id") or case_id
+        except Exception:
+            pass
+
+    try:
+        rec = register_evidence(
+            case_dir=c_dir,
+            file_path=target_file,
+            evidence_type="review_artifact",
+            case_id=canonical_case_id,
+            base_dir=ROOT_DIR,
+            description=artifact_type,
+        )
+        norm_rec = {
+            **rec,
+            "artifact_type": artifact_type,
+            "source_locator": rec["stored_path"],
+            "sha256": rec["content_hash"],
+            "recorded_sha256": rec["content_hash"],
+            "size_bytes": rec["byte_size"],
+            "registered_at": rec["received_at"],
+        }
+        try:
+            record_event(
+                case_id=canonical_case_id,
+                event_type="EVIDENCE_REGISTERED",
+                actor_id=user.username,
+                payload={
+                    "evidence_id": rec["evidence_id"],
+                    "artifact_type": artifact_type,
+                    "source_locator": rec["stored_path"],
+                    "sha256": rec["content_hash"],
+                },
+                evidence_refs=[rec["evidence_id"]],
+                db_path=ROOT_DIR / DEFAULT_LEDGER_DB,
+            )
+        except Exception:
+            pass
+        return {"ok": True, "evidence": norm_rec}
+    except ToolError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
