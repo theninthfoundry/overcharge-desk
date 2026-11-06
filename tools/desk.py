@@ -840,7 +840,7 @@ def run_finalize(
 
     # 2. Verify on-disk evidence registry before finalization (fail-closed if any artifact was tampered)
     if (case_dir / "evidence_registry.json").exists():
-        ev_verify = verify_evidence(case_dir, base_dir=root)
+        ev_verify = verify_evidence(case_dir, base_dir=root, key_file=signing_key_file)
         if not ev_verify["ok"]:
             raise ToolError(
                 f"Finalization refused: Evidence integrity verification failed: {ev_verify['failures']}",
