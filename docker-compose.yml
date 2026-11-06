@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  overcharge-desk:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: overcharge-desk:latest
+    container_name: overcharge-desk
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - PORT=8000
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,https://theninthfoundry.github.io
+    volumes:
+      - cases_data:/app/cases
+      - checkpoints_data:/app/checkpoints
+      - app_data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "tools/health_check.py"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  cases_data:
+    name: overcharge_cases_data
+  checkpoints_data:
+    name: overcharge_checkpoints_data
+  app_data:
+    name: overcharge_app_data
