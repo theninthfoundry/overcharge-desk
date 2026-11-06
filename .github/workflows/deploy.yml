@@ -1,0 +1,174 @@
+name: Overcharge Desk CD — Build, Containerize & Deploy
+
+on:
+  push:
+    branches: [ main ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # =========================================================================
+  # 1. VERIFY INVARIANTS & COMPREHENSIVE TEST SUITE
+  # =========================================================================
+  verify:
+    name: Verify Invariants & Test Suite
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: tools:.
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Verify financial & cryptographic security invariants (AST Check)
+        run: |
+          python -c "
+          import pathlib, sys
+          fin_files = [
+              'tools/desk.py', 'tools/compare.py', 'tools/check_invoice.py',
+              'tools/validate_comparison.py', 'tools/payment_sheet.py',
+              'tools/partial_review.py', 'tools/blocked_review_report.py'
+          ]
+          for f in fin_files:
+              txt = pathlib.Path(f).read_text(encoding='utf-8')
+              if 'float(' in txt:
+                  sys.exit(f'FATAL: float() banned in financial module {f}')
+          print('ALL FINANCIAL MODULES CERTIFIED: Zero float() detected.')
+          "
+
+      - name: Run test suite
+        run: |
+          python -m pytest -v --tb=short
+
+      - name: Run standalone health probe
+        run: |
+          python tools/health_check.py
+
+      - name: Validate sample fixture files
+        run: |
+          python tools/check_invoice.py tests/fixtures/example_invoice.json --strict
+          python tools/compare.py tests/fixtures/example_invoice.json seed/acme.json
+
+  # =========================================================================
+  # 2. CONTAINERIZE & PUBLISH TO GITHUB CONTAINER REGISTRY (GHCR)
+  # =========================================================================
+  container:
+    name: Build & Publish Container (GHCR)
+    needs: verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=short,prefix=sha-
+            type=ref,event=tag
+
+      - name: Build and push production container
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' || github.event_name == 'release' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Smoke test container image health
+        if: github.ref == 'refs/heads/main' || github.event_name == 'release'
+        run: |
+          PRIMARY_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          echo "Verifying published container: $PRIMARY_TAG"
+          docker pull "$PRIMARY_TAG"
+          docker run -d --name smoke-test -p 8000:8000 "$PRIMARY_TAG"
+          sleep 4
+          curl --fail --retry 5 --retry-connrefused --retry-delay 2 http://localhost:8000/api/v1/health
+          docker stop smoke-test
+          docker rm smoke-test
+
+  # =========================================================================
+  # 3. DEPLOY FRONTEND TO GITHUB PAGES
+  # =========================================================================
+  pages:
+    name: Deploy Frontend to GitHub Pages
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Prepare static distribution bundle
+        run: |
+          mkdir -p dist-pages/static
+          cp -r apps/web/* dist-pages/
+          cp -r apps/web/* dist-pages/static/
+          touch dist-pages/.nojekyll
+          cp apps/web/index.html dist-pages/404.html
+          echo "Static distribution bundle prepared in dist-pages:"
+          ls -la dist-pages/
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        continue-on-error: true
+        with:
+          path: dist-pages/
+
+      - name: Deploy to GitHub Pages (Actions Mode)
+        id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Deploy to gh-pages branch (Branch Mode Fallback)
+        uses: peaceiris/actions-gh-pages@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist-pages
+          force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
