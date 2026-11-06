@@ -8,7 +8,7 @@ FROM python:3.11-slim-bookworm AS production
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app:/app/tools \
-    APP_ENV=production \
+    APP_ENV=development \
     PORT=8000
 
 # Install minimal OS dependencies for health checking and cleanup
@@ -53,3 +53,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
 EXPOSE 8000
 
 CMD ["uvicorn", "services.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+

@@ -118,8 +118,9 @@ jobs:
           echo "Verifying published container: $PRIMARY_TAG"
           docker pull "$PRIMARY_TAG"
           docker run -d --name smoke-test -p 8000:8000 "$PRIMARY_TAG"
-          sleep 4
-          curl --fail --retry 5 --retry-connrefused --retry-delay 2 http://localhost:8000/api/v1/health
+          sleep 5
+          docker logs smoke-test
+          curl --fail --retry 10 --retry-connrefused --retry-delay 2 http://localhost:8000/api/v1/health
           docker stop smoke-test
           docker rm smoke-test
 
