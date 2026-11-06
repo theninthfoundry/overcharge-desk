@@ -17,7 +17,7 @@
     })();
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body class="app-shell">
   <!-- Top Operational Header -->
@@ -1017,6 +1017,29 @@
               </div>
             </div>
           </div>
+
+          <!-- API Gateway Connection Endpoint (GitHub Pages / Standalone Client) -->
+          <div class="panel sm:col-span-2">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">API Gateway Endpoint Configuration</h2>
+                <p class="panel-subtitle">Target FastAPI backend service for browser client operations (supports local, container, and cloud endpoints)</p>
+              </div>
+            </div>
+            <div class="panel-body space-y-3">
+              <div class="max-w-xl">
+                <label for="settings-api-base-input" class="field-label">API Gateway Base URL</label>
+                <div class="flex gap-2">
+                  <input type="text" id="settings-api-base-input" placeholder="http://localhost:8000 (leave empty for same origin)" class="input-field mono text-xs">
+                  <button type="button" onclick="saveApiBaseSettings()" class="btn btn-primary btn-sm shrink-0">Save &amp; Reconnect</button>
+                  <button type="button" onclick="resetApiBaseSettings()" class="btn btn-secondary btn-sm shrink-0">Reset</button>
+                </div>
+              </div>
+              <div class="text-[11px] mono" style="color: var(--text-secondary);">
+                Active target: <span id="settings-current-api-base" class="font-semibold" style="color: var(--text-primary);">(same-origin)</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Provision New User Account (Admin Only) -->
@@ -1210,6 +1233,6 @@
   <!-- Toast Notifications -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-  <script src="/static/app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

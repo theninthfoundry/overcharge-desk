@@ -6,6 +6,7 @@
 const STATE = {
   theme: localStorage.getItem('overcharge_desk_theme') || 'dark',
   token: localStorage.getItem('overcharge_desk_token') || null,
+  apiBase: localStorage.getItem('overcharge_desk_api_base') || (window.location.hostname.includes('github.io') ? 'http://localhost:8000' : ''),
   currentUser: null,
   activeSection: 'overview',
   overviewData: null,
@@ -166,6 +167,13 @@ function setTheme(theme) {
  * API CLIENT & AUTHENTICATION
  * ========================================================================== */
 
+function getApiUrl(path) {
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  const base = STATE.apiBase ? STATE.apiBase.replace(/\/+$/, '') : '';
+  if (!base) return path;
+  return `${base}/${path.replace(/^\/+/, '')}`;
+}
+
 async function apiRequest(path, options = {}) {
   const headers = Object.assign(
     { 'Content-Type': 'application/json' },
@@ -174,11 +182,20 @@ async function apiRequest(path, options = {}) {
   if (STATE.token) {
     headers['Authorization'] = `Bearer ${STATE.token}`;
   }
-  const resp = await fetch(path, {
-    method: options.method || 'GET',
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  const url = getApiUrl(path);
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: options.method || 'GET',
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch (netErr) {
+    if (window.location.hostname.includes('github.io')) {
+      showToast(`Cannot reach API at ${STATE.apiBase || 'current host'}. Ensure server is running or configure endpoint in Settings.`, true);
+    }
+    throw netErr;
+  }
 
   if (resp.status === 401 && path !== '/api/v1/auth/login') {
     STATE.token = null;
@@ -2926,6 +2943,11 @@ async function loadHealthSection() {
 
 async function loadSettingsSection() {
   applyTheme(STATE.theme);
+  const apiInput = document.getElementById('settings-api-base-input');
+  const apiCurrent = document.getElementById('settings-current-api-base');
+  if (apiInput) apiInput.value = STATE.apiBase || '';
+  if (apiCurrent) apiCurrent.textContent = STATE.apiBase || '(same-origin / default)';
+
   try {
     const data = await apiRequest('/api/v1/settings/users');
     STATE.settingsData = data;
@@ -3038,6 +3060,31 @@ async function submitNewUser(event) {
   } catch (err) {
     showToast(err.message, true);
   }
+}
+
+function saveApiBaseSettings() {
+  const val = (document.getElementById('settings-api-base-input')?.value || '').trim();
+  STATE.apiBase = val;
+  if (val) {
+    localStorage.setItem('overcharge_desk_api_base', val);
+  } else {
+    localStorage.removeItem('overcharge_desk_api_base');
+  }
+  const apiCurrent = document.getElementById('settings-current-api-base');
+  if (apiCurrent) apiCurrent.textContent = val || '(same-origin / default)';
+  showToast(`API Gateway target set to: ${val || 'same-origin'}`);
+  loadSettingsSection();
+}
+
+function resetApiBaseSettings() {
+  STATE.apiBase = window.location.hostname.includes('github.io') ? 'http://localhost:8000' : '';
+  localStorage.removeItem('overcharge_desk_api_base');
+  const apiInput = document.getElementById('settings-api-base-input');
+  const apiCurrent = document.getElementById('settings-current-api-base');
+  if (apiInput) apiInput.value = STATE.apiBase;
+  if (apiCurrent) apiCurrent.textContent = STATE.apiBase || '(same-origin / default)';
+  showToast('API Gateway endpoint reset.');
+  loadSettingsSection();
 }
 
 async function clearAllDemoData() {
