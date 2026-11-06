@@ -120,6 +120,15 @@ class PaymentRepository:
         finally:
             conn.close()
 
+    def list_all(self) -> List[PaymentInstruction]:
+        conn = self._get_connection()
+        try:
+            cur = conn.execute("SELECT * FROM payment_instructions ORDER BY created_at DESC")
+            rows = cur.fetchall()
+            return [self._row_to_obj(r) for r in rows]
+        finally:
+            conn.close()
+
     def mark_exported(self, instruction_id: str, exported_by: str) -> PaymentInstruction:
         now = utc_now_iso()
         conn = self._get_connection()
