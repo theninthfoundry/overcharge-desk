@@ -60,6 +60,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"^https://[a-zA-Z0-9-]+\.github\.io$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
@@ -148,5 +149,13 @@ if (web_dir / "index.html").exists():
     @app.get("/", response_class=HTMLResponse, tags=["Frontend"])
     def serve_frontend():
         return FileResponse(web_dir / "index.html")
+
+    @app.get("/styles.css", tags=["Frontend"])
+    def serve_css():
+        return FileResponse(web_dir / "styles.css")
+
+    @app.get("/app.js", tags=["Frontend"])
+    def serve_js():
+        return FileResponse(web_dir / "app.js")
 
     app.mount("/static", StaticFiles(directory=str(web_dir)), name="static")
