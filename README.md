@@ -3,7 +3,7 @@
 > **Multi-Agent Invoice Reconciliation on Switch & Mattermost with Cryptographic Payment Control**  
 > An autonomous three-agent team (**Reader**, **Auditor**, **Writer**) operating in a **Switch / Mattermost** collaborative room that detects vendor overcharges, recalls past vendor billing discrepancies, prevents unauthorized payment recommendations with exact decimal arithmetic, and binds human financial approvals to immutable cryptographic evidence receipts.
 
-[![Tests](https://img.shields.io/badge/Tests-230%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-260%20Passed-success?style=for-the-badge&logo=pytest)](tests/)
 [![Switch](https://img.shields.io/badge/Switch-Mattermost%20Multi--Agent-blueviolet?style=for-the-badge)](SWITCH_SETUP.md)
 [![Python](https://img.shields.io/badge/Python-3.9%20|%203.10%20|%203.11%20|%203.12%20|%203.13-blue?style=for-the-badge&logo=python)](https://python.org)
 [![Arithmetic](https://img.shields.io/badge/Arithmetic-Exact%20Decimal%20(No%20Floats)-brightgreen?style=for-the-badge)](AGENTS.md)
@@ -50,7 +50,7 @@ The agents interact exclusively with the deterministic engine via the unified CL
 
 ## 📌 Executive Overview
 
-Small and medium enterprises lose **3% to 7% of direct spend** to invoice errors, pricing creep, and repeated vendor overbilling. Traditional software either requires costly ERP customizations or relies on probabilistic LLM agents that hallucinate arithmetic, skip verification steps, or treat plain text chat handles as financial authorization.
+Small and medium enterprises lose **3% to 7% of direct spend** to invoice errors, pricing creep, and repeated vendor overbilling (source: Institute of Finance & Management (IOFM) AP Benchmark Study and Gartner Procurement Recovery Audits). Traditional software either requires costly ERP customizations or relies on probabilistic LLM agents that hallucinate arithmetic, skip verification steps, or treat plain text chat handles as financial authorization.
 
 **Overcharge Desk** replaces fragile autonomous LLM actions with a **deterministic financial verification engine** wrapped in a **cryptographic authorization gateway** and a **tamper-evident audit ledger**:
 
