@@ -186,7 +186,7 @@ def test_simulate_switch_fast_execution():
 def test_quickstart_cli_runner():
     """Verify tools/quickstart.py executes benchmark and ledger verification."""
     res = subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "quickstart.py"), "--no-clean"],
+        [sys.executable, str(ROOT / "tools" / "quickstart.py"), "--clean"],
         capture_output=True,
         text=True,
     )

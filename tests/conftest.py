@@ -40,7 +40,7 @@ def fresh_clone_test_environment(tmp_path_factory):
     if needs_regen:
         from tools.run_demo_suite import run_full_demo
         try:
-            run_full_demo(base_dir=ROOT, clean_run=False, key_file=key_path)
+            run_full_demo(base_dir=ROOT, clean_run=True, key_file=key_path)
         except Exception:
             pass
 
