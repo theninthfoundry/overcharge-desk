@@ -60,7 +60,7 @@ Show the passing automated test suite to establish radical engineering transpare
 ```bash
 python -m pytest -v
 ```
-*Voice-over*: "Overcharge Desk operates under strict engineering invariants defined in AGENTS.md. 230 automated adversarial tests verify exact decimal arithmetic, path traversal guards, formula injection mitigation, and fail-closed security boundaries across Windows, Ubuntu, and Python 3.9 through 3.13."
+*Voice-over*: "Overcharge Desk operates under strict engineering invariants defined in AGENTS.md. 260 automated adversarial tests verify exact decimal arithmetic, path traversal guards, formula injection mitigation, and fail-closed security boundaries across Windows, Ubuntu, and Python 3.9 through 3.13."
 
 ---
 
