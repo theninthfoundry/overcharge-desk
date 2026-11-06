@@ -128,7 +128,13 @@ def load_registry(case_dir: Path | str) -> dict:
     return data
 
 
-def save_registry(case_dir: Path | str, registry: dict, bump_sequence: bool = True) -> None:
+def save_registry(
+    case_dir: Path | str,
+    registry: dict,
+    bump_sequence: bool = True,
+    key_bytes: Optional[bytes] = None,
+    key_file: Optional[Path | str] = None,
+) -> None:
     """Save case evidence registry atomically with cryptographic hash-chain and HMAC authentication."""
     reg_path = _get_registry_path(case_dir)
     if bump_sequence:
@@ -144,7 +150,14 @@ def save_registry(case_dir: Path | str, registry: dict, bump_sequence: bool = Tr
 
     digest = compute_registry_digest(registry)
     registry["registry_digest"] = digest
-    key_bytes = _try_get_signing_key()
+    if not key_bytes and key_file:
+        try:
+            from auth import load_signing_key
+            key_bytes = load_signing_key(key_file)
+        except Exception:
+            key_bytes = None
+    if not key_bytes:
+        key_bytes = _try_get_signing_key()
     if key_bytes:
         registry["registry_signature"] = compute_registry_signature(digest, key_bytes)
     registry["updated_at"] = utc_now_iso()
@@ -284,6 +297,8 @@ def verify_evidence(
     case_dir: Path | str,
     evidence_id: Optional[str] = None,
     base_dir: Optional[Path | str] = None,
+    key_bytes: Optional[bytes] = None,
+    key_file: Optional[Path | str] = None,
 ) -> dict:
     """Re-verify content hashes of registered evidence files and registry cryptographic digest/HMAC."""
     c_dir = Path(case_dir)
@@ -306,10 +321,30 @@ def verify_evidence(
             })
         else:
             declared_sig = registry.get("registry_signature")
-            key_bytes = _try_get_signing_key()
-            if declared_sig and key_bytes:
-                expected_sig = compute_registry_signature(calc_reg_digest, key_bytes)
-                if not hmac.compare_digest(expected_sig.lower(), str(declared_sig).lower()):
+            candidate_keys: list[bytes] = []
+            if key_bytes:
+                candidate_keys.append(key_bytes)
+            if key_file:
+                try:
+                    from auth import load_signing_key
+                    kf_bytes = load_signing_key(key_file)
+                    if kf_bytes and kf_bytes not in candidate_keys:
+                        candidate_keys.append(kf_bytes)
+                except Exception:
+                    pass
+            ambient_key = _try_get_signing_key()
+            if ambient_key and ambient_key not in candidate_keys:
+                candidate_keys.append(ambient_key)
+
+            if declared_sig and candidate_keys:
+                sig_matched = any(
+                    hmac.compare_digest(
+                        compute_registry_signature(calc_reg_digest, k).lower(),
+                        str(declared_sig).lower(),
+                    )
+                    for k in candidate_keys
+                )
+                if not sig_matched:
                     failures.append({
                         "evidence_id": "REGISTRY_HMAC",
                         "error": "Registry HMAC signature verification failed (tampered registry metadata)",

@@ -103,7 +103,7 @@ def process_approval_decision(
     if not reg_path.exists():
         raise ToolError(f"Authorization refused: Missing evidence_registry.json in case directory {c_dir}", 2)
 
-    ev_verify = verify_evidence(c_dir)
+    ev_verify = verify_evidence(c_dir, key_bytes=key_bytes, key_file=key_file)
     if not ev_verify["ok"]:
         raise ToolError(
             f"Authorization refused: Evidence integrity check failed on disk: {ev_verify['failures']}",
