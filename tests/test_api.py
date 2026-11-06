@@ -110,3 +110,11 @@ def test_serve_frontend():
     assert res.status_code == 200
     assert "Overcharge Desk" in res.text
 
+    css_res = client.get("/styles.css")
+    assert css_res.status_code == 200
+    assert "body" in css_res.text or "font" in css_res.text
+
+    js_res = client.get("/app.js")
+    assert js_res.status_code == 200
+    assert "STATE" in js_res.text
+
