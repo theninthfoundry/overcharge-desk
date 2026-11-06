@@ -1,0 +1,32 @@
+{
+  "case_id": "OC-20261001-01",
+  "vendor_name_as_written": "Acme Supplies Pvt Ltd",
+  "invoice_number": "INV-1001",
+  "invoice_date": "2026-10-01",
+  "currency": "INR",
+  "lines": [
+    {
+      "line_no": 1,
+      "description": "Corrugated carton, 5-ply (CC-5)",
+      "quantity": 200,
+      "unit": "unit",
+      "unit_price": 100.0,
+      "line_total": 20000.0,
+      "source_ref": "invoices/clean-inv-1001.txt, line 1"
+    },
+    {
+      "line_no": 2,
+      "description": "Pallet wrap roll (PW-1)",
+      "quantity": 40,
+      "unit": "unit",
+      "unit_price": 250.0,
+      "line_total": 10000.0,
+      "source_ref": "invoices/clean-inv-1001.txt, line 2"
+    }
+  ],
+  "stated_total": 30000.0,
+  "source_file": "invoices/clean-inv-1001.txt",
+  "source_sha256": "3dc19e4196f33307da379b229ee24e9cba5dfe05acce8c7d8bdfcab0d968cb9a",
+  "extraction_issues": [],
+  "extracted_at": "2026-10-01T10:00:00Z"
+}
