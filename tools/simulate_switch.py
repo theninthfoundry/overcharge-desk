@@ -92,6 +92,25 @@ def run_simulation(case_id: str = "demo-overcharge", fast: bool = False, clean: 
     print_msg("SYSTEM", DIM, f"Workspace bound to: {root}", delay * 0.5)
     print_msg("SYSTEM", GREEN, f"Room active. Participants: @owner (Human Approver), @reader, @auditor, @writer\n", delay)
 
+    # Reset transient artifacts for the simulation case to allow fresh intake
+    c_dir = root / "cases" / case_id
+    if c_dir.exists():
+        import shutil
+        shutil.rmtree(c_dir / "approvals", ignore_errors=True)
+        shutil.rmtree(c_dir / "audit", ignore_errors=True)
+        shutil.rmtree(c_dir / "comparison", ignore_errors=True)
+        for art in (
+            "compare.json",
+            "manifest.json",
+            "evidence_registry.json",
+            "payment_preview.csv",
+            "corrected_payment.csv",
+            "dispute_email.md",
+        ):
+            p = c_dir / art
+            if p.exists():
+                p.unlink(missing_ok=True)
+
     # -------------------------------------------------------------------------
     # TURN 1: READER AGENT INTAKE
     # -------------------------------------------------------------------------
